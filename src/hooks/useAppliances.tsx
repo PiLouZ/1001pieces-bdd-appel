@@ -60,6 +60,19 @@ export const useAppliances = () => {
     setAppliances(prev => [...prev, applianceToAdd]);
   };
 
+  // Importer plusieurs appareils
+  const importAppliances = (newAppliances: Appliance[]) => {
+    // Vérifier les doublons par référence
+    const existingRefs = new Set(appliances.map(app => app.reference));
+    const uniqueNewAppliances = newAppliances.filter(app => !existingRefs.has(app.reference));
+    
+    if (uniqueNewAppliances.length > 0) {
+      setAppliances(prev => [...prev, ...uniqueNewAppliances]);
+      return uniqueNewAppliances.length;
+    }
+    return 0;
+  };
+
   // Supprimer un appareil
   const deleteAppliance = (id: string) => {
     setAppliances(prev => prev.filter(appliance => appliance.id !== id));
@@ -159,6 +172,7 @@ export const useAppliances = () => {
     searchQuery,
     setSearchQuery,
     addAppliance,
+    importAppliances,
     deleteAppliance,
     knownBrands,
     knownTypes,

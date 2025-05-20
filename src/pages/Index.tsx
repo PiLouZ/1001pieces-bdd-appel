@@ -1,25 +1,48 @@
 
-import React from "react";
+import React, { useState } from "react";
 import Navigation from "@/components/Navigation";
 import ApplianceForm from "@/components/ApplianceForm";
 import ApplianceList from "@/components/ApplianceList";
 import SearchBar from "@/components/SearchBar";
+import ImportForm from "@/components/ImportForm";
 import { useAppliances } from "@/hooks/useAppliances";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useToast } from "@/hooks/use-toast";
 
 const Index = () => {
   const { 
     appliances, 
     searchQuery, 
     setSearchQuery, 
-    addAppliance, 
+    addAppliance,
+    importAppliances, 
     deleteAppliance, 
     knownBrands, 
     knownTypes,
     suggestBrand,
     suggestType
   } = useAppliances();
+  const [activeTab, setActiveTab] = useState("list");
+  const { toast } = useToast();
+
+  // Handler pour l'importation
+  const handleImport = (importedAppliances: any[]) => {
+    const count = importAppliances(importedAppliances);
+    if (count > 0) {
+      toast({
+        title: "Import réussi",
+        description: `${count} nouveaux appareils ont été ajoutés à la base de données.`,
+      });
+      setActiveTab("list");
+    } else {
+      toast({
+        title: "Attention",
+        description: "Aucun nouvel appareil n'a été importé (références déjà existantes).",
+        variant: "destructive",
+      });
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -39,13 +62,26 @@ const Index = () => {
         
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="md:col-span-1">
-            <ApplianceForm 
-              knownBrands={knownBrands}
-              knownTypes={knownTypes}
-              onSubmit={addAppliance}
-              suggestBrand={suggestBrand}
-              suggestType={suggestType}
-            />
+            <Tabs defaultValue="add">
+              <TabsList className="mb-4 w-full">
+                <TabsTrigger value="add" className="flex-1">Ajouter</TabsTrigger>
+                <TabsTrigger value="import" className="flex-1" id="import">Importer</TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="add">
+                <ApplianceForm 
+                  knownBrands={knownBrands}
+                  knownTypes={knownTypes}
+                  onSubmit={addAppliance}
+                  suggestBrand={suggestBrand}
+                  suggestType={suggestType}
+                />
+              </TabsContent>
+              
+              <TabsContent value="import">
+                <ImportForm onImport={handleImport} />
+              </TabsContent>
+            </Tabs>
             
             <Card className="mt-6">
               <CardContent className="pt-6">
@@ -69,10 +105,10 @@ const Index = () => {
           </div>
           
           <div className="md:col-span-2">
-            <Tabs defaultValue="list" className="w-full">
+            <Tabs defaultValue="list" value={activeTab} onValueChange={setActiveTab}>
               <TabsList className="mb-4">
                 <TabsTrigger value="list">Liste</TabsTrigger>
-                <TabsTrigger value="info">Informations</TabsTrigger>
+                <TabsTrigger value="info" id="help">Informations</TabsTrigger>
               </TabsList>
               
               <TabsContent value="list">
@@ -90,6 +126,7 @@ const Index = () => {
                     <h4 className="font-medium mb-2">Comment ça fonctionne</h4>
                     <ul className="list-disc pl-5 mb-4 space-y-2">
                       <li>Ajoutez un nouvel appareil en remplissant le formulaire</li>
+                      <li>Importez des données par copier-coller de tableaux ou fichiers PDF</li>
                       <li>L'application suggérera automatiquement la marque et le type basés sur les références similaires</li>
                       <li>Recherchez et filtrez les appareils existants</li>
                       <li>Toutes les données sont stockées localement dans votre navigateur</li>
@@ -98,7 +135,8 @@ const Index = () => {
                     <ul className="list-disc pl-5 space-y-2">
                       <li>Suggestions intelligentes basées sur les données existantes</li>
                       <li>Autocomplétion pour les marques et types</li>
-                      <li>Tri des données par colonne</li>
+                      <li>Import de données par copier-coller</li>
+                      <li>Import de données depuis des fichiers PDF (bientôt)</li>
                       <li>Recherche par référence, marque ou type</li>
                       <li>Stockage local des données</li>
                     </ul>
