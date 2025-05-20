@@ -1,7 +1,8 @@
 
 export interface Appliance {
   id: string;
-  reference: string;
+  reference: string; // Référence technique
+  commercialRef?: string; // Référence commerciale
   brand: string;
   type: string;
   dateAdded: string;
@@ -15,4 +16,18 @@ export interface ImportResult {
   success: boolean;
   appliances: Appliance[];
   errors?: string[];
+  missingInfo?: Appliance[]; // Appareils avec informations manquantes
+}
+
+export interface ExportOptions {
+  partReference: string;
+  format: "csv" | "html";
+  includeHeader?: boolean;
+}
+
+// Structure pour stocker temporairement les appareils importés
+export interface ImportSession {
+  partReference: string;
+  appliances: Appliance[];
+  createdAt: string;
 }

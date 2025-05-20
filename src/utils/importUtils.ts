@@ -3,7 +3,8 @@ import { Appliance, ImportResult } from "@/types/appliance";
 
 /**
  * Analyse le texte brut copié-collé et tente d'en extraire des appareils
- * Le format attendu est un tableau avec au moins des colonnes pour la référence, la marque et le type
+ * Le format attendu est un tableau avec des colonnes pour les références techniques, 
+ * références commerciales, marques et types
  */
 export function parseClipboardData(data: string): ImportResult {
   const lines = data
@@ -37,7 +38,7 @@ export function parseClipboardData(data: string): ImportResult {
     return { 
       success: false, 
       appliances: [], 
-      errors: ["Format non reconnu. Veuillez utiliser un format tabulaire avec référence, marque et type."] 
+      errors: ["Format non reconnu. Veuillez utiliser un format tabulaire avec références, marque et type."] 
     };
   }
   
@@ -61,8 +62,9 @@ function detectSpaceSeparated(lines: string[]): Appliance[] {
       appliances.push({
         id: Date.now().toString() + i,
         reference: parts[0].trim(),
-        brand: parts[1].trim(),
-        type: parts[2].trim(),
+        commercialRef: parts.length > 3 ? parts[1].trim() : undefined,
+        brand: parts.length > 3 ? parts[2].trim() : parts[1].trim(),
+        type: parts.length > 3 ? parts[3].trim() : parts[2].trim(),
         dateAdded: new Date().toISOString().split("T")[0],
         source: "clipboard"
       });
@@ -86,6 +88,7 @@ function detectWithSeparator(lines: string[], separator: string): Appliance[] {
   // On essaie de détecter un en-tête
   let startIndex = 0;
   let referenceIndex = 0;
+  let commercialRefIndex = -1; // -1 signifie non trouvé
   let brandIndex = 1;
   let typeIndex = 2;
   
@@ -98,12 +101,26 @@ function detectWithSeparator(lines: string[], separator: string): Appliance[] {
     // Chercher les indices des colonnes appropriées
     for (let i = 0; i < headers.length; i++) {
       const header = headers[i].trim().toLowerCase();
-      if (header.includes("ref") || header.includes("référence")) {
+      if (header.includes("ref") && header.includes("tech")) {
         referenceIndex = i;
+      } else if (header.includes("ref") && header.includes("com")) {
+        commercialRefIndex = i;
       } else if (header.includes("marque") || header.includes("brand")) {
         brandIndex = i;
       } else if (header.includes("type")) {
         typeIndex = i;
+      }
+    }
+    
+    // Si on n'a pas trouvé explicitement une colonne "référence technique" mais 
+    // qu'on a trouvé une colonne "référence" et une "référence commerciale"
+    if (commercialRefIndex === -1) {
+      for (let i = 0; i < headers.length; i++) {
+        const header = headers[i].trim().toLowerCase();
+        if (header.includes("ref") && !header.includes("tech") && i !== referenceIndex) {
+          commercialRefIndex = i;
+          break;
+        }
       }
     }
     
@@ -115,14 +132,21 @@ function detectWithSeparator(lines: string[], separator: string): Appliance[] {
     const parts = lines[i].split(separator);
     
     if (parts.length > Math.max(referenceIndex, brandIndex, typeIndex)) {
-      appliances.push({
+      const appliance: Appliance = {
         id: Date.now().toString() + i,
         reference: parts[referenceIndex].trim(),
         brand: parts[brandIndex].trim(),
         type: parts[typeIndex].trim(),
         dateAdded: new Date().toISOString().split("T")[0],
         source: "clipboard"
-      });
+      };
+      
+      // Ajouter la référence commerciale si elle existe
+      if (commercialRefIndex >= 0 && parts.length > commercialRefIndex) {
+        appliance.commercialRef = parts[commercialRefIndex].trim();
+      }
+      
+      appliances.push(appliance);
     }
   }
   

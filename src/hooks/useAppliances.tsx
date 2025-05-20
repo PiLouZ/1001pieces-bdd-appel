@@ -41,6 +41,7 @@ export const useAppliances = () => {
       const filtered = appliances.filter(
         appliance =>
           appliance.reference.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          (appliance.commercialRef && appliance.commercialRef.toLowerCase().includes(searchQuery.toLowerCase())) ||
           appliance.brand.toLowerCase().includes(searchQuery.toLowerCase()) ||
           appliance.type.toLowerCase().includes(searchQuery.toLowerCase())
       );
@@ -78,16 +79,42 @@ export const useAppliances = () => {
     setAppliances(prev => prev.filter(appliance => appliance.id !== id));
   };
 
+  // Nettoyer la base de données (supprimer les doublons)
+  const cleanDatabase = () => {
+    // Utiliser un Map pour ne garder que la première occurrence de chaque référence
+    const uniqueAppliances = new Map<string, Appliance>();
+    
+    appliances.forEach(appliance => {
+      const key = appliance.reference;
+      if (!uniqueAppliances.has(key)) {
+        uniqueAppliances.set(key, appliance);
+      }
+    });
+    
+    const cleanedAppliances = Array.from(uniqueAppliances.values());
+    setAppliances(cleanedAppliances);
+    
+    return appliances.length - cleanedAppliances.length; // Nombre de doublons supprimés
+  };
+
   // Suggérer une marque basée sur la référence
   const suggestBrand = (reference: string): string | null => {
     // Chercher une correspondance exacte de référence
     const exactMatch = appliances.find(a => a.reference === reference);
     if (exactMatch) return exactMatch.brand;
     
+    // Chercher par référence commerciale
+    const commercialMatch = appliances.find(a => a.commercialRef === reference);
+    if (commercialMatch) return commercialMatch.brand;
+    
     // Chercher une correspondance partielle (début de référence)
     const partialMatches = appliances.filter(a => 
       reference.startsWith(a.reference.substring(0, 3)) || 
-      a.reference.startsWith(reference.substring(0, 3))
+      a.reference.startsWith(reference.substring(0, 3)) ||
+      (a.commercialRef && (
+        reference.startsWith(a.commercialRef.substring(0, 3)) || 
+        a.commercialRef.startsWith(reference.substring(0, 3))
+      ))
     );
     
     if (partialMatches.length > 0) {
@@ -122,7 +149,11 @@ export const useAppliances = () => {
       // Chercher une correspondance partielle de référence dans la même marque
       const refMatches = brandMatches.filter(a => 
         reference.startsWith(a.reference.substring(0, 3)) || 
-        a.reference.startsWith(reference.substring(0, 3))
+        a.reference.startsWith(reference.substring(0, 3)) ||
+        (a.commercialRef && (
+          reference.startsWith(a.commercialRef.substring(0, 3)) || 
+          a.commercialRef.startsWith(reference.substring(0, 3))
+        ))
       );
       
       if (refMatches.length > 0) {
@@ -169,11 +200,13 @@ export const useAppliances = () => {
 
   return {
     appliances: filteredAppliances,
+    allAppliances: appliances,
     searchQuery,
     setSearchQuery,
     addAppliance,
     importAppliances,
     deleteAppliance,
+    cleanDatabase,
     knownBrands,
     knownTypes,
     suggestBrand,

@@ -30,7 +30,7 @@ interface ApplianceListProps {
   onDelete: (id: string) => void;
 }
 
-type SortField = "reference" | "brand" | "type" | "dateAdded";
+type SortField = "reference" | "commercialRef" | "brand" | "type" | "dateAdded";
 type SortDirection = "asc" | "desc";
 
 const ApplianceList: React.FC<ApplianceListProps> = ({ appliances, onDelete }) => {
@@ -47,8 +47,8 @@ const ApplianceList: React.FC<ApplianceListProps> = ({ appliances, onDelete }) =
   };
 
   const sortedAppliances = [...appliances].sort((a, b) => {
-    const aValue = a[sortField].toLowerCase();
-    const bValue = b[sortField].toLowerCase();
+    const aValue = a[sortField]?.toLowerCase() || "";
+    const bValue = b[sortField]?.toLowerCase() || "";
 
     if (sortDirection === "asc") {
       return aValue > bValue ? 1 : -1;
@@ -71,8 +71,14 @@ const ApplianceList: React.FC<ApplianceListProps> = ({ appliances, onDelete }) =
             <TableHeader>
               <TableRow>
                 <TableHead onClick={() => handleSort("reference")} className="cursor-pointer">
-                  Référence 
+                  Référence technique
                   {sortField === "reference" && (
+                    sortDirection === "asc" ? <ChevronUp className="inline ml-1 h-4 w-4" /> : <ChevronDown className="inline ml-1 h-4 w-4" />
+                  )}
+                </TableHead>
+                <TableHead onClick={() => handleSort("commercialRef")} className="cursor-pointer">
+                  Référence commerciale
+                  {sortField === "commercialRef" && (
                     sortDirection === "asc" ? <ChevronUp className="inline ml-1 h-4 w-4" /> : <ChevronDown className="inline ml-1 h-4 w-4" />
                   )}
                 </TableHead>
@@ -101,6 +107,7 @@ const ApplianceList: React.FC<ApplianceListProps> = ({ appliances, onDelete }) =
               {sortedAppliances.map((appliance) => (
                 <TableRow key={appliance.id}>
                   <TableCell>{appliance.reference}</TableCell>
+                  <TableCell>{appliance.commercialRef || "-"}</TableCell>
                   <TableCell>{appliance.brand}</TableCell>
                   <TableCell>{appliance.type}</TableCell>
                   <TableCell>{appliance.dateAdded}</TableCell>

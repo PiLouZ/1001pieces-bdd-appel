@@ -41,7 +41,7 @@ const ImportForm: React.FC<ImportFormProps> = ({ onImport }) => {
       } else {
         toast({
           title: "Erreur",
-          description: "Aucun appareil valide trouvé dans les données collées",
+          description: result.errors?.join(", ") || "Aucun appareil valide trouvé dans les données collées",
           variant: "destructive",
         });
       }
@@ -74,7 +74,7 @@ const ImportForm: React.FC<ImportFormProps> = ({ onImport }) => {
   return (
     <Card className="w-full">
       <CardHeader>
-        <CardTitle>Importer des appareils</CardTitle>
+        <CardTitle>Données des appareils</CardTitle>
       </CardHeader>
       <CardContent>
         <Tabs defaultValue="clipboard">
@@ -87,7 +87,7 @@ const ImportForm: React.FC<ImportFormProps> = ({ onImport }) => {
             <div className="space-y-4">
               <div>
                 <p className="text-sm text-gray-600 mb-2">
-                  Collez vos données tabulaires (colonnes attendues: référence, marque, type)
+                  Collez vos données tabulaires (colonnes attendues: référence technique, référence commerciale, marque, type)
                 </p>
                 <Textarea
                   value={clipboardText}
@@ -96,6 +96,9 @@ const ImportForm: React.FC<ImportFormProps> = ({ onImport }) => {
                   placeholder="Collez ici vos données (tableau Excel, texte structuré...)"
                   className="font-mono text-sm"
                 />
+                <p className="text-xs text-gray-500 mt-1">
+                  L'ordre des colonnes sera automatiquement détecté si la première ligne contient des en-têtes.
+                </p>
               </div>
               <Button 
                 onClick={handleClipboardImport} 
