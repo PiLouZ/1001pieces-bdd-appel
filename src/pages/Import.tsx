@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 const Import: React.FC = () => {
-  const { importAppliances } = useAppliances();
+  const { importAppliances, getKnownBrands, getKnownTypes } = useAppliances();
   const { toast } = useToast();
   const [partReference, setPartReference] = useState("");
 
@@ -49,6 +49,10 @@ const Import: React.FC = () => {
     }
   };
 
+  // Récupérer les marques et types connus
+  const knownBrands = getKnownBrands();
+  const knownTypes = getKnownTypes();
+
   return (
     <div className="flex flex-col min-h-screen">
       <Navigation />
@@ -80,7 +84,11 @@ const Import: React.FC = () => {
           </CardContent>
         </Card>
         
-        <ImportForm onImport={handleImport} />
+        <ImportForm 
+          onImport={handleImport} 
+          knownBrands={knownBrands}
+          knownTypes={knownTypes}
+        />
       </main>
       
       <footer className="bg-gray-100 p-4 text-center text-gray-600">

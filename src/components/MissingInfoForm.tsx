@@ -29,8 +29,8 @@ interface MissingInfoFormProps {
 
 const MissingInfoForm: React.FC<MissingInfoFormProps> = ({
   appliances,
-  knownBrands,
-  knownTypes,
+  knownBrands = [],
+  knownTypes = [],
   onComplete,
   onCancel
 }) => {
@@ -59,6 +59,10 @@ const MissingInfoForm: React.FC<MissingInfoFormProps> = ({
 
   const isMissingInfo = editedAppliances.some(app => !app.brand || !app.type);
 
+  // Protection contre les tableaux null ou undefined
+  const safeKnownBrands = knownBrands || [];
+  const safeKnownTypes = knownTypes || [];
+
   return (
     <Card className="w-full">
       <CardHeader>
@@ -76,7 +80,7 @@ const MissingInfoForm: React.FC<MissingInfoFormProps> = ({
                 onChange={(e) => handleApplyBrand(e.target.value)}
               />
               <datalist id="knownBrandsList">
-                {knownBrands.map((brand) => (
+                {safeKnownBrands.map((brand) => (
                   <option key={brand} value={brand} />
                 ))}
               </datalist>
@@ -92,7 +96,7 @@ const MissingInfoForm: React.FC<MissingInfoFormProps> = ({
                 onChange={(e) => handleApplyType(e.target.value)}
               />
               <datalist id="knownTypesList">
-                {knownTypes.map((type) => (
+                {safeKnownTypes.map((type) => (
                   <option key={type} value={type} />
                 ))}
               </datalist>
@@ -123,7 +127,7 @@ const MissingInfoForm: React.FC<MissingInfoFormProps> = ({
                       className={!appliance.brand ? "border-amber-500" : ""}
                     />
                     <datalist id={`brands-${index}`}>
-                      {knownBrands.map((brand) => (
+                      {safeKnownBrands.map((brand) => (
                         <option key={brand} value={brand} />
                       ))}
                     </datalist>
@@ -136,7 +140,7 @@ const MissingInfoForm: React.FC<MissingInfoFormProps> = ({
                       className={!appliance.type ? "border-amber-500" : ""}
                     />
                     <datalist id={`types-${index}`}>
-                      {knownTypes.map((type) => (
+                      {safeKnownTypes.map((type) => (
                         <option key={type} value={type} />
                       ))}
                     </datalist>
