@@ -4,15 +4,21 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Navigation from "@/components/Navigation";
 import ImportForm from "@/components/ImportForm";
 import { useAppliances } from "@/hooks/useAppliances";
-import { Appliance } from "@/types/appliance";
+import { Appliance, ImportSession } from "@/types/appliance";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { generateCSV, downloadFile } from "@/utils/exportUtils";
+import { Link } from "react-router-dom";
+import { FileExport, Import as ImportIcon } from "lucide-react";
 
 const Import: React.FC = () => {
   const { importAppliances, knownBrands, knownTypes } = useAppliances();
   const { toast } = useToast();
   const [partReference, setPartReference] = useState("");
+  const [importedAppliances, setImportedAppliances] = useState<Appliance[] | null>(null);
+  const [showExportOption, setShowExportOption] = useState(false);
 
   const handleImport = (appliances: Appliance[]) => {
     if (!partReference.trim()) {
@@ -25,7 +31,7 @@ const Import: React.FC = () => {
     }
     
     // Stocker la référence de la pièce dans une session temporaire (via localStorage)
-    const importSession = {
+    const importSession: ImportSession = {
       partReference,
       appliances,
       createdAt: new Date().toISOString()
@@ -47,6 +53,43 @@ const Import: React.FC = () => {
         description: `${appliances.length - importedCount} appareils étaient déjà dans la base de données.`,
       });
     }
+
+    // Si nous avons seulement deux colonnes dans les données importées, proposer l'export
+    const isTwoColumnsImport = appliances.some(app => !app.brand || !app.type);
+    if (isTwoColumnsImport) {
+      setImportedAppliances(appliances);
+      setShowExportOption(true);
+    } else {
+      setImportedAppliances(null);
+      setShowExportOption(false);
+    }
+  };
+
+  const handleExportImported = () => {
+    if (!importedAppliances || importedAppliances.length === 0) {
+      toast({
+        title: "Erreur",
+        description: "Aucune donnée à exporter",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const exportOptions = {
+      partReference: partReference,
+      format: "csv" as const,
+      includeHeader: true
+    };
+
+    const csvContent = generateCSV(importedAppliances, exportOptions);
+    const fileName = `compatibilite_${partReference.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.csv`;
+    
+    downloadFile(csvContent, fileName, "text/csv;charset=utf-8");
+    
+    toast({
+      title: "Export réussi",
+      description: `Le fichier ${fileName} a été généré.`,
+    });
   };
 
   return (
@@ -54,7 +97,10 @@ const Import: React.FC = () => {
       <Navigation />
       
       <main className="flex-1 container mx-auto py-8 px-4">
-        <h1 className="text-3xl font-bold mb-6">Importer des appareils</h1>
+        <h1 className="text-3xl font-bold mb-6 flex items-center">
+          <ImportIcon className="mr-2 h-6 w-6" />
+          Importer des appareils
+        </h1>
         
         <Card className="mb-6">
           <CardHeader>
@@ -85,6 +131,33 @@ const Import: React.FC = () => {
           knownBrands={knownBrands}
           knownTypes={knownTypes}
         />
+
+        {showExportOption && importedAppliances && importedAppliances.length > 0 && (
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <FileExport className="mr-2 h-5 w-5" />
+                Exporter les données compatibles
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="mb-4">
+                Vous avez importé des données avec peu de colonnes. Ces appareils ont été complétés avec leurs marques et types.
+                Vous pouvez maintenant exporter ces données au format CSV pour votre liste de compatibilité.
+              </p>
+              <div className="flex space-x-4">
+                <Button onClick={handleExportImported}>
+                  Exporter en CSV ({importedAppliances.length} appareils)
+                </Button>
+                <Button variant="outline" asChild>
+                  <Link to="/export">
+                    Options d'export avancées
+                  </Link>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </main>
       
       <footer className="bg-gray-100 p-4 text-center text-gray-600">
