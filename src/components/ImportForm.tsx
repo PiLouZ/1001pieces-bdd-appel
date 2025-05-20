@@ -7,14 +7,18 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { Appliance, ImportSource } from "@/types/appliance";
 import { parseClipboardData } from "@/utils/importUtils";
+import MissingInfoForm from "./MissingInfoForm";
 
 interface ImportFormProps {
   onImport: (appliances: Appliance[]) => void;
+  knownBrands: string[];
+  knownTypes: string[];
 }
 
-const ImportForm: React.FC<ImportFormProps> = ({ onImport }) => {
+const ImportForm: React.FC<ImportFormProps> = ({ onImport, knownBrands, knownTypes }) => {
   const [clipboardText, setClipboardText] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [appliancesWithMissingInfo, setAppliancesWithMissingInfo] = useState<Appliance[]>([]);
   const { toast } = useToast();
 
   const handleClipboardImport = async () => {
@@ -32,12 +36,22 @@ const ImportForm: React.FC<ImportFormProps> = ({ onImport }) => {
       const result = parseClipboardData(clipboardText);
       
       if (result.success && result.appliances.length > 0) {
-        onImport(result.appliances);
-        toast({
-          title: "Succès",
-          description: `${result.appliances.length} appareils importés avec succès`,
-        });
-        setClipboardText("");
+        if (result.missingInfo && result.missingInfo.length > 0) {
+          // Il y a des informations manquantes à compléter
+          setAppliancesWithMissingInfo(result.appliances);
+          toast({
+            title: "Information",
+            description: `${result.missingInfo.length} appareils ont besoin de compléments d'informations.`,
+          });
+        } else {
+          // Tout est complet, on peut importer
+          onImport(result.appliances);
+          toast({
+            title: "Succès",
+            description: `${result.appliances.length} appareils importés avec succès`,
+          });
+          setClipboardText("");
+        }
       } else {
         toast({
           title: "Erreur",
@@ -71,6 +85,37 @@ const ImportForm: React.FC<ImportFormProps> = ({ onImport }) => {
     // Cela nécessitera l'installation d'un package comme pdf.js
   };
 
+  const handleCompleteMissingInfo = (completedAppliances: Appliance[]) => {
+    onImport(completedAppliances);
+    setAppliancesWithMissingInfo([]);
+    setClipboardText("");
+    toast({
+      title: "Succès",
+      description: `${completedAppliances.length} appareils importés avec succès`,
+    });
+  };
+
+  const handleCancelMissingInfo = () => {
+    setAppliancesWithMissingInfo([]);
+    toast({
+      title: "Importation annulée",
+      description: "Les données n'ont pas été importées",
+    });
+  };
+
+  // Si on a des appareils avec des infos manquantes, on affiche le formulaire pour les compléter
+  if (appliancesWithMissingInfo.length > 0) {
+    return (
+      <MissingInfoForm
+        appliances={appliancesWithMissingInfo}
+        knownBrands={knownBrands}
+        knownTypes={knownTypes}
+        onComplete={handleCompleteMissingInfo}
+        onCancel={handleCancelMissingInfo}
+      />
+    );
+  }
+
   return (
     <Card className="w-full">
       <CardHeader>
@@ -87,7 +132,7 @@ const ImportForm: React.FC<ImportFormProps> = ({ onImport }) => {
             <div className="space-y-4">
               <div>
                 <p className="text-sm text-gray-600 mb-2">
-                  Collez vos données tabulaires (colonnes attendues: référence technique, référence commerciale, marque, type)
+                  Collez vos données tabulaires (ordre des colonnes: type, marque, référence technique, référence commerciale)
                 </p>
                 <Textarea
                   value={clipboardText}
@@ -97,7 +142,8 @@ const ImportForm: React.FC<ImportFormProps> = ({ onImport }) => {
                   className="font-mono text-sm"
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  L'ordre des colonnes sera automatiquement détecté si la première ligne contient des en-têtes.
+                  L'ordre des colonnes sera détecté si la première ligne contient des en-têtes.
+                  Les colonnes type et marque sont facultatives.
                 </p>
               </div>
               <Button 

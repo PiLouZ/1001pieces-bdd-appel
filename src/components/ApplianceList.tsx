@@ -23,19 +23,20 @@ import {
   CardHeader, 
   CardTitle 
 } from "@/components/ui/card";
-import { ChevronDown, ChevronUp, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Pencil, Trash2 } from "lucide-react";
 
 interface ApplianceListProps {
   appliances: Appliance[];
   onDelete: (id: string) => void;
+  onEdit: (appliance: Appliance) => void;
 }
 
-type SortField = "reference" | "commercialRef" | "brand" | "type" | "dateAdded";
+type SortField = "reference" | "commercialRef" | "brand" | "type";
 type SortDirection = "asc" | "desc";
 
-const ApplianceList: React.FC<ApplianceListProps> = ({ appliances, onDelete }) => {
-  const [sortField, setSortField] = useState<SortField>("dateAdded");
-  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+const ApplianceList: React.FC<ApplianceListProps> = ({ appliances, onDelete, onEdit }) => {
+  const [sortField, setSortField] = useState<SortField>("reference");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
 
   const handleSort = (field: SortField) => {
     if (field === sortField) {
@@ -94,12 +95,6 @@ const ApplianceList: React.FC<ApplianceListProps> = ({ appliances, onDelete }) =
                     sortDirection === "asc" ? <ChevronUp className="inline ml-1 h-4 w-4" /> : <ChevronDown className="inline ml-1 h-4 w-4" />
                   )}
                 </TableHead>
-                <TableHead onClick={() => handleSort("dateAdded")} className="cursor-pointer">
-                  Date d'ajout
-                  {sortField === "dateAdded" && (
-                    sortDirection === "asc" ? <ChevronUp className="inline ml-1 h-4 w-4" /> : <ChevronDown className="inline ml-1 h-4 w-4" />
-                  )}
-                </TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -110,7 +105,6 @@ const ApplianceList: React.FC<ApplianceListProps> = ({ appliances, onDelete }) =
                   <TableCell>{appliance.commercialRef || "-"}</TableCell>
                   <TableCell>{appliance.brand}</TableCell>
                   <TableCell>{appliance.type}</TableCell>
-                  <TableCell>{appliance.dateAdded}</TableCell>
                   <TableCell className="text-right">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -119,6 +113,10 @@ const ApplianceList: React.FC<ApplianceListProps> = ({ appliances, onDelete }) =
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent>
+                        <DropdownMenuItem onClick={() => onEdit(appliance)}>
+                          <Pencil className="mr-2 h-4 w-4" />
+                          Modifier
+                        </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => onDelete(appliance.id)}>
                           <Trash2 className="mr-2 h-4 w-4" />
                           Supprimer

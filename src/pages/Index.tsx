@@ -3,12 +3,27 @@ import React, { useState } from "react";
 import Navigation from "@/components/Navigation";
 import ApplianceForm from "@/components/ApplianceForm";
 import ApplianceList from "@/components/ApplianceList";
+import ApplianceEditDialog from "@/components/ApplianceEditDialog";
 import SearchBar from "@/components/SearchBar";
 import ImportForm from "@/components/ImportForm";
 import { useAppliances } from "@/hooks/useAppliances";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
+import { Button } from "@/components/ui/button";
+import { Appliance } from "@/types/appliance";
+import { AlertTriangle, Trash2 } from "lucide-react";
+import { 
+  AlertDialog, 
+  AlertDialogAction, 
+  AlertDialogCancel, 
+  AlertDialogContent, 
+  AlertDialogDescription, 
+  AlertDialogFooter, 
+  AlertDialogHeader, 
+  AlertDialogTitle,
+  AlertDialogTrigger
+} from "@/components/ui/alert-dialog";
 
 const Index = () => {
   const { 
@@ -16,18 +31,22 @@ const Index = () => {
     searchQuery, 
     setSearchQuery, 
     addAppliance,
+    updateAppliance,
     importAppliances, 
-    deleteAppliance, 
+    deleteAppliance,
+    clearDatabase,
     knownBrands, 
     knownTypes,
     suggestBrand,
     suggestType
   } = useAppliances();
   const [activeTab, setActiveTab] = useState("list");
+  const [editingAppliance, setEditingAppliance] = useState<Appliance | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const { toast } = useToast();
 
   // Handler pour l'importation
-  const handleImport = (importedAppliances: any[]) => {
+  const handleImport = (importedAppliances: Appliance[]) => {
     const count = importAppliances(importedAppliances);
     if (count > 0) {
       toast({
@@ -44,6 +63,29 @@ const Index = () => {
     }
   };
 
+  const handleEdit = (appliance: Appliance) => {
+    setEditingAppliance(appliance);
+    setIsEditDialogOpen(true);
+  };
+
+  const handleSaveEdit = (updatedAppliance: Appliance) => {
+    updateAppliance(updatedAppliance);
+    toast({
+      title: "Modification réussie",
+      description: "L'appareil a été modifié avec succès.",
+    });
+    setIsEditDialogOpen(false);
+    setEditingAppliance(null);
+  };
+
+  const handleClearDatabase = () => {
+    clearDatabase();
+    toast({
+      title: "Base de données vidée",
+      description: "Tous les appareils ont été supprimés de la base de données.",
+    });
+  };
+
   return (
     <div className="min-h-screen bg-gray-100">
       <Navigation />
@@ -55,7 +97,35 @@ const Index = () => {
             Cet outil vous permet de gérer une base de données d'appareils électroménagers.
             L'application suggérera automatiquement la marque et le type en fonction des références similaires déjà enregistrées.
           </p>
-          <div className="w-full flex justify-end mb-4">
+          <div className="w-full flex justify-between mb-4">
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" size="sm">
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Vider la base de données
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Êtes-vous sûr de vouloir vider la base de données ?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    <div className="flex items-center gap-2 text-amber-600 mb-4">
+                      <AlertTriangle className="h-5 w-5" />
+                      <span>Cette action est irréversible.</span>
+                    </div>
+                    Cette action supprimera définitivement tous les appareils de la base de données.
+                    Cette fonctionnalité est destinée uniquement à l'environnement de développement.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Annuler</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleClearDatabase}>
+                    Vider la base de données
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+            
             <SearchBar value={searchQuery} onChange={setSearchQuery} />
           </div>
         </div>
@@ -79,7 +149,11 @@ const Index = () => {
               </TabsContent>
               
               <TabsContent value="import">
-                <ImportForm onImport={handleImport} />
+                <ImportForm 
+                  onImport={handleImport} 
+                  knownBrands={knownBrands}
+                  knownTypes={knownTypes}
+                />
               </TabsContent>
             </Tabs>
             
@@ -112,7 +186,11 @@ const Index = () => {
               </TabsList>
               
               <TabsContent value="list">
-                <ApplianceList appliances={appliances} onDelete={deleteAppliance} />
+                <ApplianceList 
+                  appliances={appliances} 
+                  onDelete={deleteAppliance} 
+                  onEdit={handleEdit}
+                />
               </TabsContent>
               
               <TabsContent value="info">
@@ -149,8 +227,18 @@ const Index = () => {
       </main>
       
       <footer className="mt-10 p-4 bg-gray-200 text-center text-gray-600">
-        <p>&copy; 2023 Gestionnaire d'Appareils Électroménagers</p>
+        <p>&copy; {new Date().getFullYear()} Gestionnaire d'Appareils Électroménagers</p>
       </footer>
+
+      {/* Dialog pour modifier un appareil */}
+      <ApplianceEditDialog
+        isOpen={isEditDialogOpen}
+        onClose={() => setIsEditDialogOpen(false)}
+        onSave={handleSaveEdit}
+        appliance={editingAppliance}
+        knownBrands={knownBrands}
+        knownTypes={knownTypes}
+      />
     </div>
   );
 };

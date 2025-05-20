@@ -10,17 +10,23 @@ export function generateCSV(appliances: Appliance[], options: ExportOptions): st
   
   // Ajout de l'en-tête
   if (includeHeader) {
-    csv += "reference_technique,reference_commerciale,marque,type,reference_piece\n";
+    csv += "reference_piece,type,marque,modele,reference_technique,reference_commerciale\n";
   }
   
   // Ajout des données
   appliances.forEach(appliance => {
+    // Concaténation pour le modèle: "Référence technique - Référence commerciale"
+    const modele = appliance.commercialRef 
+      ? `${appliance.reference} - ${appliance.commercialRef}`
+      : appliance.reference;
+    
     const row = [
-      escapeCSV(appliance.reference),
-      escapeCSV(appliance.commercialRef || ""),
-      escapeCSV(appliance.brand),
+      escapeCSV(partReference),
       escapeCSV(appliance.type),
-      escapeCSV(partReference)
+      escapeCSV(appliance.brand),
+      escapeCSV(modele),
+      escapeCSV(appliance.reference),
+      escapeCSV(appliance.commercialRef || "")
     ];
     csv += row.join(",") + "\n";
   });
@@ -42,7 +48,7 @@ export function generateHTML(appliances: Appliance[], options: ExportOptions): s
       <tr>
         <th>Marque</th>
         <th>Type</th>
-        <th>Référence</th>
+        <th>Modèle</th>
       </tr>
     </thead>
     <tbody>
@@ -59,21 +65,28 @@ export function generateHTML(appliances: Appliance[], options: ExportOptions): s
 
   // Construire les lignes du tableau groupées par marque
   Object.entries(appliancesByBrand).forEach(([brand, brandAppliances]) => {
+    // Trier par type
+    const sortedByType = [...brandAppliances].sort((a, b) => a.type.localeCompare(b.type));
+    
     html += `
       <tr class="brand-row">
-        <td rowspan="${brandAppliances.length}">${brand}</td>
-        <td>${brandAppliances[0].type}</td>
-        <td>${brandAppliances[0].reference}</td>
+        <td rowspan="${sortedByType.length}">${brand}</td>
+        <td>${sortedByType[0].type}</td>
+        <td>${sortedByType[0].commercialRef 
+          ? `${sortedByType[0].reference} - ${sortedByType[0].commercialRef}` 
+          : sortedByType[0].reference}</td>
       </tr>
     `;
 
     // Lignes suivantes pour cette marque (sans répéter la marque)
-    for (let i = 1; i < brandAppliances.length; i++) {
-      const appliance = brandAppliances[i];
+    for (let i = 1; i < sortedByType.length; i++) {
+      const appliance = sortedByType[i];
       html += `
       <tr>
         <td>${appliance.type}</td>
-        <td>${appliance.reference}</td>
+        <td>${appliance.commercialRef 
+          ? `${appliance.reference} - ${appliance.commercialRef}` 
+          : appliance.reference}</td>
       </tr>
       `;
     }

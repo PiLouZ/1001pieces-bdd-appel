@@ -61,6 +61,15 @@ export const useAppliances = () => {
     setAppliances(prev => [...prev, applianceToAdd]);
   };
 
+  // Modifier un appareil existant
+  const updateAppliance = (updatedAppliance: Appliance) => {
+    setAppliances(prev => 
+      prev.map(app => 
+        app.id === updatedAppliance.id ? updatedAppliance : app
+      )
+    );
+  };
+
   // Importer plusieurs appareils
   const importAppliances = (newAppliances: Appliance[]) => {
     // Vérifier les doublons par référence
@@ -77,6 +86,12 @@ export const useAppliances = () => {
   // Supprimer un appareil
   const deleteAppliance = (id: string) => {
     setAppliances(prev => prev.filter(appliance => appliance.id !== id));
+  };
+  
+  // Vider complètement la base de données
+  const clearDatabase = () => {
+    setAppliances([]);
+    localStorage.removeItem("appliances");
   };
 
   // Nettoyer la base de données (supprimer les doublons)
@@ -204,8 +219,10 @@ export const useAppliances = () => {
     searchQuery,
     setSearchQuery,
     addAppliance,
+    updateAppliance,
     importAppliances,
     deleteAppliance,
+    clearDatabase,
     cleanDatabase,
     knownBrands,
     knownTypes,
