@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 const Import: React.FC = () => {
-  const { importAppliances, getKnownBrands, getKnownTypes } = useAppliances();
+  const { importAppliances, knownBrands, knownTypes } = useAppliances();
   const { toast } = useToast();
   const [partReference, setPartReference] = useState("");
 
@@ -48,10 +48,6 @@ const Import: React.FC = () => {
       });
     }
   };
-
-  // Récupérer les marques et types connus
-  const knownBrands = getKnownBrands();
-  const knownTypes = getKnownTypes();
 
   return (
     <div className="flex flex-col min-h-screen">
