@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { generateCSV, downloadFile } from "@/utils/exportUtils";
 import { Link } from "react-router-dom";
-import { FileExport, Import as ImportIcon } from "lucide-react";
+import { FileText, Import as ImportIcon } from "lucide-react";
 
 const Import: React.FC = () => {
   const { importAppliances, knownBrands, knownTypes } = useAppliances();
@@ -136,7 +136,7 @@ const Import: React.FC = () => {
           <Card className="mt-6">
             <CardHeader>
               <CardTitle className="flex items-center">
-                <FileExport className="mr-2 h-5 w-5" />
+                <FileText className="mr-2 h-5 w-5" />
                 Exporter les données compatibles
               </CardTitle>
             </CardHeader>

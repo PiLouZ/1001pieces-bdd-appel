@@ -1,7 +1,7 @@
 
 import React from "react";
 import { Link } from "react-router-dom";
-import { Database, FileExport, FileText, Import } from "lucide-react";
+import { Database, FileText, Import } from "lucide-react";
 
 const Navigation: React.FC = () => {
   return (
@@ -22,7 +22,7 @@ const Navigation: React.FC = () => {
             Importer
           </Link>
           <Link to="/export" className="text-white hover:text-blue-200 flex items-center">
-            <FileExport className="mr-1 h-4 w-4" />
+            <FileText className="mr-1 h-4 w-4" />
             Exporter
           </Link>
         </div>

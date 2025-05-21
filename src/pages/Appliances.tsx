@@ -5,7 +5,7 @@ import Navigation from "@/components/Navigation";
 import ApplianceList from "@/components/ApplianceList";
 import SearchBar from "@/components/SearchBar";
 import { useAppliances } from "@/hooks/useAppliances";
-import { Database, FileExport } from "lucide-react";
+import { Database, FileText } from "lucide-react";
 
 const Appliances: React.FC = () => {
   const { 
@@ -36,7 +36,7 @@ const Appliances: React.FC = () => {
                 <span>Appareils enregistrés ({appliances.length})</span>
                 <div className="text-sm text-muted-foreground font-normal">
                   <span className="inline-flex items-center">
-                    <FileExport className="mr-1 h-4 w-4" />
+                    <FileText className="mr-1 h-4 w-4" />
                     Pour exporter des données, rendez-vous sur la page Export
                   </span>
                 </div>
