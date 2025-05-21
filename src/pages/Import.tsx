@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Navigation from "@/components/Navigation";
@@ -14,7 +13,7 @@ import { Link } from "react-router-dom";
 import { FileText, Import as ImportIcon } from "lucide-react";
 
 const Import: React.FC = () => {
-  const { importAppliances, knownBrands, knownTypes } = useAppliances();
+  const { importAppliances, knownBrands, knownTypes, suggestBrand, suggestType } = useAppliances();
   const { toast } = useToast();
   const [partReference, setPartReference] = useState("");
   const [importedAppliances, setImportedAppliances] = useState<Appliance[] | null>(null);
@@ -30,36 +29,86 @@ const Import: React.FC = () => {
       return;
     }
     
-    // Stocker la référence de la pièce dans une session temporaire (via localStorage)
-    const importSession: ImportSession = {
-      partReference,
-      appliances,
-      createdAt: new Date().toISOString()
-    };
-    
-    localStorage.setItem("lastImportSession", JSON.stringify(importSession));
-    
-    // Ajouter les appareils à la base de données
-    const importedCount = importAppliances(appliances);
-    
-    toast({
-      title: "Importation réussie",
-      description: `${importedCount} nouveaux appareils ajoutés à la base de données.`,
-    });
-    
-    if (importedCount < appliances.length) {
-      toast({
-        title: "Information",
-        description: `${appliances.length - importedCount} appareils étaient déjà dans la base de données.`,
-      });
-    }
-
-    // Si nous avons seulement deux colonnes dans les données importées, proposer l'export
+    // Pour le format à 2 colonnes, on essaie de compléter les marques et types
     const isTwoColumnsImport = appliances.some(app => !app.brand || !app.type);
+    
     if (isTwoColumnsImport) {
-      setImportedAppliances(appliances);
+      // Compléter automatiquement les marques et types quand c'est possible
+      const completedAppliances = appliances.map(appliance => {
+        let updatedAppliance = { ...appliance };
+        
+        // Si la marque est manquante, essayer de la suggérer
+        if (!updatedAppliance.brand || updatedAppliance.brand.trim() === "") {
+          const suggestedBrand = suggestBrand(updatedAppliance.reference);
+          if (suggestedBrand) {
+            updatedAppliance.brand = suggestedBrand;
+          }
+        }
+        
+        // Si le type est manquant et qu'on a une marque, essayer de le suggérer
+        if ((!updatedAppliance.type || updatedAppliance.type.trim() === "") && updatedAppliance.brand) {
+          const suggestedType = suggestType(updatedAppliance.reference, updatedAppliance.brand);
+          if (suggestedType) {
+            updatedAppliance.type = suggestedType;
+          }
+        }
+        
+        return updatedAppliance;
+      });
+      
+      // Stocker la référence de la pièce dans une session temporaire
+      const importSession: ImportSession = {
+        partReference,
+        appliances: completedAppliances,
+        createdAt: new Date().toISOString()
+      };
+      
+      localStorage.setItem("lastImportSession", JSON.stringify(importSession));
+      
+      // Ajouter les appareils complétés à la base de données
+      const importedCount = importAppliances(completedAppliances);
+      
+      toast({
+        title: "Importation réussie",
+        description: `${importedCount} nouveaux appareils ajoutés à la base de données.`,
+      });
+      
+      if (importedCount < completedAppliances.length) {
+        toast({
+          title: "Information",
+          description: `${completedAppliances.length - importedCount} appareils étaient déjà dans la base de données.`,
+        });
+      }
+      
+      // Proposer l'export pour les données de format à 2 colonnes
+      setImportedAppliances(completedAppliances);
       setShowExportOption(true);
     } else {
+      // Stocker la référence de la pièce dans une session temporaire (via localStorage)
+      const importSession: ImportSession = {
+        partReference,
+        appliances,
+        createdAt: new Date().toISOString()
+      };
+      
+      localStorage.setItem("lastImportSession", JSON.stringify(importSession));
+      
+      // Ajouter les appareils à la base de données
+      const importedCount = importAppliances(appliances);
+      
+      toast({
+        title: "Importation réussie",
+        description: `${importedCount} nouveaux appareils ajoutés à la base de données.`,
+      });
+      
+      if (importedCount < appliances.length) {
+        toast({
+          title: "Information",
+          description: `${appliances.length - importedCount} appareils étaient déjà dans la base de données.`,
+        });
+      }
+      
+      // Ne pas proposer l'export pour le format à 4 colonnes
       setImportedAppliances(null);
       setShowExportOption(false);
     }
@@ -142,7 +191,7 @@ const Import: React.FC = () => {
             </CardHeader>
             <CardContent>
               <p className="mb-4">
-                Vous avez importé des données avec peu de colonnes. Ces appareils ont été complétés avec leurs marques et types.
+                Vous avez importé des données au format à 2 colonnes. Ces appareils ont été complétés avec leurs marques et types si possible.
                 Vous pouvez maintenant exporter ces données au format CSV pour votre liste de compatibilité.
               </p>
               <div className="flex space-x-4">

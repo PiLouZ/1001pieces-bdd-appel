@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -36,15 +35,25 @@ const ImportForm: React.FC<ImportFormProps> = ({ onImport, knownBrands, knownTyp
       const result = parseClipboardData(clipboardText);
       
       if (result.success && result.appliances.length > 0) {
-        if (result.missingInfo && result.missingInfo.length > 0) {
-          // Il y a des informations manquantes à compléter
+        // Format à 2 colonnes détecté
+        if (result.twoColumnsFormat) {
+          onImport(result.appliances);
+          toast({
+            title: "Succès",
+            description: `${result.appliances.length} appareils importés (format à 2 colonnes). Les marques et types seront complétés automatiquement si possible.`,
+          });
+          setClipboardText("");
+          
+        } else if (result.missingInfo && result.missingInfo.length > 0) {
+          // Format à 4 colonnes mais avec des informations manquantes
           setAppliancesWithMissingInfo(result.missingInfo);
           toast({
             title: "Information",
             description: `${result.missingInfo.length} appareils ont besoin de compléments d'informations.`,
           });
+          
         } else {
-          // Tout est complet, on peut importer
+          // Format à 4 colonnes complet
           onImport(result.appliances);
           toast({
             title: "Succès",

@@ -17,6 +17,7 @@ export interface ImportResult {
   appliances: Appliance[];
   errors?: string[];
   missingInfo?: Appliance[]; // Appareils avec informations manquantes
+  twoColumnsFormat?: boolean; // Indique si les données sont au format 2 colonnes
 }
 
 export interface ExportOptions {

@@ -3,11 +3,9 @@ import { Appliance, ImportResult } from "@/types/appliance";
 
 /**
  * Analyse le texte brut copié-collé et tente d'en extraire des appareils
- * Le format attendu est un tableau avec des colonnes pour:
- * - Type (facultatif)
- * - Marque (facultatif)
- * - Référence technique
- * - Référence commerciale
+ * Formats supportés :
+ * - 4 colonnes : Type, Marque, Référence technique, Référence commerciale
+ * - 2 colonnes : Référence technique, Référence commerciale
  */
 export function parseClipboardData(data: string): ImportResult {
   const lines = data
@@ -19,46 +17,70 @@ export function parseClipboardData(data: string): ImportResult {
     return { success: false, appliances: [], errors: ["Aucune donnée valide"] };
   }
 
-  const appliances: Appliance[] = [];
-  const missingInfo: Appliance[] = [];
-  const errors: string[] = [];
-  
-  // Différentes stratégies d'analyse
-  let detectedAppliances = detectTabSeparated(lines);
-  
-  if (detectedAppliances.length === 0) {
-    detectedAppliances = detectSpaceSeparated(lines);
+  // Déterminer le séparateur et le format des données
+  const separators = ["\t", ";", ",", /\s{2,}/];
+  let bestSeparator = "\t"; // Par défaut
+  let columnCount = 0;
+  let detectedAppliances: Appliance[] = [];
+
+  // Tester chaque séparateur pour trouver celui qui donne le résultat le plus cohérent
+  for (const sep of separators) {
+    const testAppliances = detectWithSeparator(lines, sep);
+    if (testAppliances.length > 0) {
+      // Pour chaque séparateur, on compte le nombre de colonnes moyen
+      const firstLine = typeof sep === 'string' 
+        ? lines[0].split(sep) 
+        : lines[0].split(sep as RegExp);
+      
+      // Si on obtient plus d'appareils ou plus de colonnes, on considère ce séparateur meilleur
+      if (testAppliances.length > detectedAppliances.length || firstLine.length > columnCount) {
+        detectedAppliances = testAppliances;
+        bestSeparator = sep;
+        columnCount = firstLine.length;
+      }
+    }
   }
-  
-  if (detectedAppliances.length === 0) {
-    detectedAppliances = detectSemicolonSeparated(lines);
-  }
-  
-  if (detectedAppliances.length === 0) {
-    detectedAppliances = detectCommaSeparated(lines);
-  }
-  
+
   if (detectedAppliances.length === 0) {
     return { 
       success: false, 
       appliances: [], 
-      errors: ["Format non reconnu. Veuillez utiliser un format tabulaire avec références, marque et type."] 
+      errors: ["Format non reconnu. Veuillez utiliser un format tabulaire avec références et éventuellement marque et type."] 
     };
   }
 
-  // Vérifier pour les informations manquantes
-  detectedAppliances.forEach(appliance => {
-    if (!appliance.brand || !appliance.type) {
-      missingInfo.push(appliance);
+  // Vérifier le nombre de colonnes pour déterminer s'il s'agit d'un format à 2 ou 4 colonnes
+  const isTwoColumnFormat = detectedAppliances.every(app => 
+    // Pour le format à 2 colonnes, on a seulement référence et ref commerciale
+    app.reference && (app.commercialRef !== undefined) && 
+    !app.brand && !app.type
+  );
+
+  // Pour le format à 2 colonnes, on cherche à compléter les données
+  if (isTwoColumnFormat) {
+    // On retourne les appareils sans demander de compléter
+    return {
+      success: true,
+      appliances: detectedAppliances,
+      twoColumnsFormat: true
+    };
+  } else {
+    // Format à 4 colonnes - on vérifie que toutes les infos essentielles sont présentes
+    const missingInfo = detectedAppliances.filter(app => !app.brand || !app.type);
+    
+    if (missingInfo.length > 0) {
+      return {
+        success: true,
+        appliances: detectedAppliances,
+        missingInfo: missingInfo
+      };
+    } else {
+      return {
+        success: true,
+        appliances: detectedAppliances
+      };
     }
-    appliances.push(appliance);
-  });
-  
-  return {
-    success: true,
-    appliances,
-    missingInfo: missingInfo.length > 0 ? missingInfo : undefined
-  };
+  }
 }
 
 function detectTabSeparated(lines: string[]): Appliance[] {
@@ -66,49 +88,7 @@ function detectTabSeparated(lines: string[]): Appliance[] {
 }
 
 function detectSpaceSeparated(lines: string[]): Appliance[] {
-  // On utilise une regex qui détecte les espaces multiples comme séparateur
-  const appliances: Appliance[] = [];
-  
-  for (let i = 0; i < lines.length; i++) {
-    const parts = lines[i].split(/\s{2,}/);
-    if (parts.length >= 2) {
-      // Format attendu: type, marque, référence technique, référence commerciale
-      // Mais type et marque peuvent être absents
-      const applianceData: Record<string, string> = {};
-      
-      if (parts.length >= 4) {
-        // On a toutes les colonnes
-        applianceData.type = parts[0].trim();
-        applianceData.brand = parts[1].trim();
-        applianceData.reference = parts[2].trim();
-        applianceData.commercialRef = parts[3].trim();
-      } else if (parts.length === 3) {
-        // On a probablement marque, ref technique, ref commerciale
-        applianceData.brand = parts[0].trim();
-        applianceData.reference = parts[1].trim();
-        applianceData.commercialRef = parts[2].trim();
-      } else if (parts.length === 2) {
-        // On a uniquement les références
-        applianceData.reference = parts[0].trim();
-        applianceData.commercialRef = parts[1].trim();
-      }
-      
-      // Vérifier qu'on a au moins une référence technique
-      if (applianceData.reference) {
-        appliances.push({
-          id: Date.now().toString() + i,
-          reference: applianceData.reference,
-          commercialRef: applianceData.commercialRef || undefined,
-          brand: applianceData.brand || "",
-          type: applianceData.type || "",
-          dateAdded: new Date().toISOString().split("T")[0],
-          source: "clipboard"
-        });
-      }
-    }
-  }
-  
-  return appliances;
+  return detectWithSeparator(lines, /\s{2,}/);
 }
 
 function detectSemicolonSeparated(lines: string[]): Appliance[] {
@@ -119,15 +99,15 @@ function detectCommaSeparated(lines: string[]): Appliance[] {
   return detectWithSeparator(lines, ",");
 }
 
-function detectWithSeparator(lines: string[], separator: string): Appliance[] {
+function detectWithSeparator(lines: string[], separator: string | RegExp): Appliance[] {
   const appliances: Appliance[] = [];
   
   // On essaie de détecter un en-tête
   let startIndex = 0;
   let typeIndex = -1;
   let brandIndex = -1;
-  let referenceIndex = 2; // Position par défaut de la référence technique
-  let commercialRefIndex = 3; // Position par défaut de la référence commerciale
+  let referenceIndex = -1;
+  let commercialRefIndex = -1;
   
   // Si la première ligne contient des textes comme "référence", "marque", "type", on l'utilise comme en-tête
   const headerLine = lines[0].toLowerCase();
@@ -137,7 +117,9 @@ function detectWithSeparator(lines: string[], separator: string): Appliance[] {
     headerLine.includes("marque") || 
     headerLine.includes("type")
   ) {
-    const headers = headerLine.split(separator);
+    const headers = typeof separator === 'string' 
+      ? headerLine.split(separator)
+      : headerLine.split(separator);
     
     // Chercher les indices des colonnes appropriées
     for (let i = 0; i < headers.length; i++) {
@@ -148,50 +130,94 @@ function detectWithSeparator(lines: string[], separator: string): Appliance[] {
         brandIndex = i;
       } else if (header.includes("ref") && header.includes("tech")) {
         referenceIndex = i;
-      } else if (header.includes("ref") && header.includes("com")) {
+      } else if (header.includes("ref") && (header.includes("com") || header.includes("modèle"))) {
         commercialRefIndex = i;
+      } else if (header.includes("ref") || header.includes("référence")) {
+        // Si on a juste "référence" sans précision, on considère que c'est la référence technique
+        if (referenceIndex === -1) {
+          referenceIndex = i;
+        }
       }
     }
     
     startIndex = 1; // Commencer le traitement à partir de la ligne suivante
   }
   
+  // Si on n'a pas détecté les colonnes dans l'en-tête, utiliser un format par défaut
+  // En fonction du nombre de colonnes
+  if (lines.length > 0) {
+    const firstDataLineParts = typeof separator === 'string' 
+      ? lines[startIndex].split(separator)
+      : lines[startIndex].split(separator);
+    
+    if (firstDataLineParts.length === 2) {
+      // Format 2 colonnes : référence technique et commerciale
+      if (referenceIndex === -1) referenceIndex = 0;
+      if (commercialRefIndex === -1) commercialRefIndex = 1;
+    } else if (firstDataLineParts.length >= 4) {
+      // Format 4 colonnes : type, marque, référence technique, commerciale
+      if (typeIndex === -1) typeIndex = 0;
+      if (brandIndex === -1) brandIndex = 1;
+      if (referenceIndex === -1) referenceIndex = 2;
+      if (commercialRefIndex === -1) commercialRefIndex = 3;
+    } else if (firstDataLineParts.length === 3) {
+      // Format 3 colonnes : on suppose marque, référence technique, commerciale
+      if (brandIndex === -1) brandIndex = 0;
+      if (referenceIndex === -1) referenceIndex = 1;
+      if (commercialRefIndex === -1) commercialRefIndex = 2;
+    }
+  }
+  
   // Traiter les lignes
   for (let i = startIndex; i < lines.length; i++) {
-    const parts = lines[i].split(separator);
+    if (!lines[i].trim()) continue; // Ignorer les lignes vides
     
-    // Vérifier qu'on a suffisamment de colonnes pour les références
-    const minColumns = Math.max(referenceIndex, commercialRefIndex) + 1;
-    if (parts.length >= minColumns) {
+    const parts = typeof separator === 'string' 
+      ? lines[i].split(separator)
+      : lines[i].split(separator);
+    
+    // Format à deux colonnes (références uniquement)
+    if (parts.length === 2 && referenceIndex === -1 && commercialRefIndex === -1) {
+      appliances.push({
+        id: Date.now().toString() + i,
+        reference: parts[0].trim(),
+        commercialRef: parts[1].trim(),
+        brand: "",  // Marque à compléter
+        type: "",   // Type à compléter
+        dateAdded: new Date().toISOString().split("T")[0],
+        source: "clipboard"
+      });
+      continue;
+    }
+    
+    // S'assurer qu'on a une référence technique
+    if (referenceIndex >= 0 && referenceIndex < parts.length && parts[referenceIndex].trim()) {
       const applianceData: Record<string, string> = {
         reference: parts[referenceIndex].trim()
       };
       
       // Ajouter les informations si elles existent
-      if (commercialRefIndex >= 0 && parts.length > commercialRefIndex) {
+      if (commercialRefIndex >= 0 && commercialRefIndex < parts.length) {
         applianceData.commercialRef = parts[commercialRefIndex].trim();
       }
       
-      if (typeIndex >= 0 && parts.length > typeIndex) {
+      if (typeIndex >= 0 && typeIndex < parts.length) {
         applianceData.type = parts[typeIndex].trim();
       }
       
-      if (brandIndex >= 0 && parts.length > brandIndex) {
+      if (brandIndex >= 0 && brandIndex < parts.length) {
         applianceData.brand = parts[brandIndex].trim();
       }
       
-      // Vérifier qu'on a au moins une référence technique
-      if (applianceData.reference) {
-        appliances.push({
-          id: Date.now().toString() + i,
-          reference: applianceData.reference,
-          commercialRef: applianceData.commercialRef || undefined,
-          brand: applianceData.brand || "",
-          type: applianceData.type || "",
-          dateAdded: new Date().toISOString().split("T")[0],
-          source: "clipboard"
-        });
-      }
+      appliances.push({
+        id: Date.now().toString() + i,
+        reference: applianceData.reference,
+        commercialRef: applianceData.commercialRef || "",
+        brand: applianceData.brand || "",
+        type: applianceData.type || "",
+        dateAdded: new Date().toISOString().split("T")[0],
+        source: "clipboard"
+      });
     }
   }
   
