@@ -20,13 +20,14 @@ import { ExportOptions } from "@/types/appliance";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const Export: React.FC = () => {
-  const { allAppliances, cleanDatabase, getAppliancesByPartReference } = useAppliances();
+  const { allAppliances, cleanDatabase, getAppliancesByPartReference, knownPartReferences: appPartRefs } = useAppliances();
   const { toast } = useToast();
   const [partReference, setPartReference] = useState("");
   const [exportFormat, setExportFormat] = useState<"csv" | "html">("csv");
   const [includeHeader, setIncludeHeader] = useState(true);
   const [lastImportedPartRef, setLastImportedPartRef] = useState("");
   const [knownPartReferences, setKnownPartReferences] = useState<string[]>([]);
+  const [appliancesCount, setAppliancesCount] = useState(0);
 
   useEffect(() => {
     // Récupérer la dernière session d'importation
@@ -36,22 +37,40 @@ const Export: React.FC = () => {
         const lastSession = JSON.parse(lastSessionStr);
         setLastImportedPartRef(lastSession.partReference || "");
         setPartReference(lastSession.partReference || "");
+        
+        // Mettre à jour le compte d'appareils
+        if (lastSession.partReference) {
+          const compatibleAppliances = getAppliancesByPartReference(lastSession.partReference);
+          setAppliancesCount(compatibleAppliances.length);
+        }
       } catch (e) {
         console.error("Erreur lors de la récupération de la dernière session:", e);
       }
     }
 
     // Récupérer toutes les références de pièces connues
-    const storedReferences = localStorage.getItem("knownPartReferences");
-    if (storedReferences) {
-      try {
-        setKnownPartReferences(JSON.parse(storedReferences));
-      } catch (e) {
-        console.error("Erreur lors de la récupération des références de pièces:", e);
-        setKnownPartReferences([]);
-      }
+    setKnownPartReferences(appPartRefs);
+  }, [appPartRefs, getAppliancesByPartReference]);
+
+  // Mettre à jour le nombre d'appareils quand la référence de pièce change
+  useEffect(() => {
+    if (partReference.trim()) {
+      const compatibleAppliances = getAppliancesByPartReference(partReference);
+      setAppliancesCount(compatibleAppliances.length);
+    } else {
+      setAppliancesCount(0);
     }
-  }, []);
+  }, [partReference, getAppliancesByPartReference]);
+
+  const handlePartReferenceChange = (ref: string) => {
+    setPartReference(ref);
+    if (ref.trim()) {
+      const compatibleAppliances = getAppliancesByPartReference(ref);
+      setAppliancesCount(compatibleAppliances.length);
+    } else {
+      setAppliancesCount(0);
+    }
+  };
 
   const handleExportAll = () => {
     try {
@@ -138,7 +157,7 @@ const Export: React.FC = () => {
 
       toast({
         title: "Exportation réussie",
-        description: `Le fichier ${exportFormat.toUpperCase()} a été généré avec succès.`,
+        description: `Le fichier ${exportFormat.toUpperCase()} a été généré avec succès pour ${appliancesForPart.length} appareils.`,
       });
     } catch (error) {
       toast({
@@ -190,24 +209,25 @@ const Export: React.FC = () => {
                     <Label htmlFor="partReference">Référence de la pièce</Label>
                     <div className="flex gap-2">
                       <div className="flex-1">
-                        <Input
-                          id="partReference"
-                          value={partReference}
-                          onChange={(e) => setPartReference(e.target.value)}
-                          placeholder="Ex: XYZ123"
-                          list="partReferencesList"
-                        />
-                        <datalist id="partReferencesList">
-                          {knownPartReferences.map((ref) => (
-                            <option key={ref} value={ref} />
-                          ))}
-                        </datalist>
+                        <Select 
+                          value={partReference} 
+                          onValueChange={handlePartReferenceChange}
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Sélectionner une référence de pièce" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {knownPartReferences.map(ref => (
+                              <SelectItem key={ref} value={ref}>{ref}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                       
                       {lastImportedPartRef && lastImportedPartRef !== partReference && (
                         <Button 
                           variant="outline" 
-                          onClick={() => setPartReference(lastImportedPartRef)}
+                          onClick={() => handlePartReferenceChange(lastImportedPartRef)}
                           className="whitespace-nowrap"
                         >
                           Utiliser dernière importée ({lastImportedPartRef})
@@ -247,8 +267,11 @@ const Export: React.FC = () => {
                     </div>
                   )}
                   
-                  <Button onClick={handleExportByReference}>
-                    Exporter les appareils compatibles
+                  <Button 
+                    onClick={handleExportByReference} 
+                    disabled={!partReference.trim() || appliancesCount === 0}
+                  >
+                    Exporter les appareils compatibles ({appliancesCount})
                   </Button>
                 </div>
               </CardContent>

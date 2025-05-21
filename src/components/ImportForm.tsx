@@ -1,3 +1,4 @@
+
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -127,47 +128,46 @@ const ImportForm: React.FC<ImportFormProps> = ({ onImport, knownBrands, knownTyp
 
   return (
     <Card className="w-full">
-      <CardHeader>
+      <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Données des appareils</CardTitle>
+        <TabsList>
+          <TabsTrigger value="clipboard">Copier/Coller</TabsTrigger>
+          <TabsTrigger value="pdf">PDF</TabsTrigger>
+        </TabsList>
       </CardHeader>
       <CardContent>
         <Tabs defaultValue="clipboard">
-          <TabsList className="mb-4">
-            <TabsTrigger value="clipboard">Copier/Coller</TabsTrigger>
-            <TabsTrigger value="pdf">PDF</TabsTrigger>
-          </TabsList>
-          
           <TabsContent value="clipboard">
             <div className="space-y-4">
-              <div>
-                <p className="text-sm text-gray-600 mb-2">
-                  Collez vos données tabulaires dans l'un des formats suivants :
-                </p>
-                <div className="mb-4 p-3 bg-gray-50 border rounded-md text-sm">
-                  <p className="font-medium">Format à 4 colonnes (pour alimenter la base de données) :</p>
-                  <ul className="list-disc list-inside pl-2 text-gray-600">
+              <Textarea
+                value={clipboardText}
+                onChange={(e) => setClipboardText(e.target.value)}
+                rows={8}
+                placeholder="Collez ici vos données (tableau Excel, texte structuré...)"
+                className="font-mono text-sm"
+              />
+              
+              <div className="p-3 bg-gray-50 border rounded-md text-sm">
+                <p className="font-medium">Formats acceptés :</p>
+                <ul className="list-disc list-inside pl-2 text-gray-600">
+                  <li><strong>Format à 4 colonnes</strong> (pour alimenter la base de données) :</li>
+                  <ul className="list-disc list-inside pl-6 text-gray-600">
                     <li>Type de l'appareil</li>
                     <li>Marque de l'appareil</li>
                     <li>Référence technique de l'appareil</li>
                     <li>Référence commerciale de l'appareil</li>
                   </ul>
-                  <p className="font-medium mt-2">Format à 2 colonnes (pour générer un fichier de compatibilité) :</p>
-                  <ul className="list-disc list-inside pl-2 text-gray-600">
+                  <li className="mt-1"><strong>Format à 2 colonnes</strong> (pour générer un fichier de compatibilité) :</li>
+                  <ul className="list-disc list-inside pl-6 text-gray-600">
                     <li>Référence technique de l'appareil</li>
                     <li>Référence commerciale de l'appareil</li>
                   </ul>
-                  <p className="text-xs text-gray-500 mt-2">
-                    Note: Dans le format à 2 colonnes, l'outil complètera automatiquement les marques et types s'il les connaît déjà.
-                  </p>
-                </div>
-                <Textarea
-                  value={clipboardText}
-                  onChange={(e) => setClipboardText(e.target.value)}
-                  rows={8}
-                  placeholder="Collez ici vos données (tableau Excel, texte structuré...)"
-                  className="font-mono text-sm"
-                />
+                </ul>
+                <p className="text-xs text-gray-500 mt-2">
+                  Note: Dans le format à 2 colonnes, l'outil complètera automatiquement les marques et types s'il les connaît déjà.
+                </p>
               </div>
+              
               <Button 
                 onClick={handleClipboardImport} 
                 disabled={isLoading || !clipboardText.trim()}

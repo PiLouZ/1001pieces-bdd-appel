@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/dialog";
 
 const Import: React.FC = () => {
-  const { importAppliances, knownBrands, knownTypes, suggestBrand, suggestType } = useAppliances();
+  const { importAppliances, knownBrands, knownTypes, suggestBrand, suggestType, associateApplicancesToPartReference } = useAppliances();
   const { toast } = useToast();
   const [partReference, setPartReference] = useState("");
   const [importedAppliances, setImportedAppliances] = useState<Appliance[] | null>(null);
@@ -40,30 +40,36 @@ const Import: React.FC = () => {
         setShowReferenceDialog(true);
         return;
       }
+    }
       
-      // Compléter automatiquement les marques et types
-      const completedAppliances = appliances.map(appliance => {
-        let updatedAppliance = { ...appliance };
-        
-        // Si la marque est manquante, essayer de la suggérer
-        if (!updatedAppliance.brand || updatedAppliance.brand.trim() === "") {
-          const suggestedBrand = suggestBrand(updatedAppliance.reference);
-          if (suggestedBrand) {
-            updatedAppliance.brand = suggestedBrand;
-          }
-        }
-        
-        // Si le type est manquant et qu'on a une marque, essayer de le suggérer
-        if ((!updatedAppliance.type || updatedAppliance.type.trim() === "") && updatedAppliance.brand) {
-          const suggestedType = suggestType(updatedAppliance.reference, updatedAppliance.brand);
-          if (suggestedType) {
-            updatedAppliance.type = suggestedType;
-          }
-        }
-        
-        return updatedAppliance;
-      });
+    // Compléter automatiquement les marques et types si nécessaire
+    const completedAppliances = appliances.map(appliance => {
+      let updatedAppliance = { ...appliance };
       
+      // Si la marque est manquante, essayer de la suggérer
+      if (!updatedAppliance.brand || updatedAppliance.brand.trim() === "") {
+        const suggestedBrand = suggestBrand(updatedAppliance.reference);
+        if (suggestedBrand) {
+          updatedAppliance.brand = suggestedBrand;
+        }
+      }
+      
+      // Si le type est manquant et qu'on a une marque, essayer de le suggérer
+      if ((!updatedAppliance.type || updatedAppliance.type.trim() === "") && updatedAppliance.brand) {
+        const suggestedType = suggestType(updatedAppliance.reference, updatedAppliance.brand);
+        if (suggestedType) {
+          updatedAppliance.type = suggestedType;
+        }
+      }
+      
+      return updatedAppliance;
+    });
+    
+    // Ajouter les appareils complétés à la base de données
+    const importedCount = importAppliances(completedAppliances);
+    
+    // Si une référence de pièce est fournie, associer les appareils à cette référence
+    if (partReference.trim()) {
       // Stocker la référence de la pièce dans une session temporaire
       const importSession: ImportSession = {
         partReference,
@@ -73,44 +79,33 @@ const Import: React.FC = () => {
       
       localStorage.setItem("lastImportSession", JSON.stringify(importSession));
       
-      // Ajouter les appareils complétés à la base de données
-      const importedCount = importAppliances(completedAppliances);
+      // Associer tous les appareils importés à la référence de pièce
+      const applianceIds = completedAppliances.map(app => app.id);
+      associateApplicancesToPartReference(applianceIds, partReference);
       
       toast({
         title: "Importation réussie",
-        description: `${importedCount} nouveaux appareils ajoutés à la base de données.`,
+        description: `${importedCount} nouveaux appareils ajoutés et associés à la référence ${partReference}.`,
       });
       
-      if (importedCount < completedAppliances.length) {
-        toast({
-          title: "Information",
-          description: `${completedAppliances.length - importedCount} appareils étaient déjà dans la base de données.`,
-        });
-      }
-      
-      // Proposer l'export pour les données de format à 2 colonnes
+      // Proposer l'export
       setImportedAppliances(completedAppliances);
       setShowExportOption(true);
     } else {
-      // Format à 4 colonnes - pas besoin de référence de pièce
-      // Ajouter directement les appareils à la base de données
-      const importedCount = importAppliances(appliances);
-      
       toast({
         title: "Importation réussie",
         description: `${importedCount} nouveaux appareils ajoutés à la base de données.`,
       });
       
-      if (importedCount < appliances.length) {
-        toast({
-          title: "Information",
-          description: `${appliances.length - importedCount} appareils étaient déjà dans la base de données.`,
-        });
-      }
-      
-      // Ne pas proposer l'export pour le format à 4 colonnes
       setImportedAppliances(null);
       setShowExportOption(false);
+    }
+    
+    if (importedCount < completedAppliances.length) {
+      toast({
+        title: "Information",
+        description: `${completedAppliances.length - importedCount} appareils étaient déjà dans la base de données.`,
+      });
     }
   };
 
@@ -122,6 +117,7 @@ const Import: React.FC = () => {
       (!app.type || app.type.trim() === "")
     );
     
+    setIsTwoColumnFormat(is2ColFormat);
     processImport(appliances, is2ColFormat);
   };
 
@@ -176,31 +172,22 @@ const Import: React.FC = () => {
           Importer des appareils
         </h1>
         
-        {!isTwoColumnFormat && (
-          <Card className="mb-6">
-            <CardHeader>
-              <CardTitle>Information sur la pièce (Format 2 colonnes uniquement)</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="grid w-full max-w-sm items-center gap-1.5">
-                  <Label htmlFor="partReference">Référence de la pièce</Label>
-                  <Input
-                    id="partReference"
-                    type="text"
-                    value={partReference}
-                    onChange={(e) => setPartReference(e.target.value)}
-                    placeholder="Ex: XYZ123"
-                    className="w-full"
-                  />
-                  <p className="text-sm text-gray-500">
-                    Cette référence sera associée aux appareils importés en format 2 colonnes pour la génération de fichiers.
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+        <div className="mb-6">
+          <div className="grid w-full items-center gap-1.5">
+            <Label htmlFor="partReference">Référence de la pièce (Optionnel pour format 4 colonnes, Obligatoire pour format 2 colonnes)</Label>
+            <Input
+              id="partReference"
+              type="text"
+              value={partReference}
+              onChange={(e) => setPartReference(e.target.value)}
+              placeholder="Ex: XYZ123"
+              className="w-full max-w-sm"
+            />
+            <p className="text-sm text-gray-500">
+              Cette référence sera associée aux appareils importés pour la génération de fichiers de compatibilité.
+            </p>
+          </div>
+        </div>
         
         <ImportForm 
           onImport={handleImport} 
@@ -218,7 +205,7 @@ const Import: React.FC = () => {
             </CardHeader>
             <CardContent>
               <p className="mb-4">
-                Vous avez importé des données au format à 2 colonnes. Ces appareils ont été complétés avec leurs marques et types si possible.
+                Les appareils ont été importés et associés à la référence de pièce {partReference}.
                 Vous pouvez maintenant exporter ces données au format CSV pour votre liste de compatibilité.
               </p>
               <div className="flex space-x-4">

@@ -24,7 +24,7 @@ import {
   Card, 
   CardContent
 } from "@/components/ui/card";
-import { ChevronDown, ChevronUp, MoreVertical, Pencil, Trash2, Tag, Check } from "lucide-react";
+import { ChevronDown, ChevronUp, MoreHorizontal, Pencil, Trash2, Tag, Check, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useAppliances } from "@/hooks/useAppliances";
@@ -32,6 +32,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -68,10 +69,11 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
   const [bulkUpdateValue, setBulkUpdateValue] = useState("");
   const [showCompatibleDialog, setShowCompatibleDialog] = useState(false);
   const [selectedApplianceForParts, setSelectedApplianceForParts] = useState<Appliance | null>(null);
+  const [newPartReference, setNewPartReference] = useState("");
   const editInputRef = useRef<HTMLInputElement>(null);
   const bulkInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
-  const { getPartReferencesForAppliance, knownBrands, knownTypes } = useAppliances();
+  const { getPartReferencesForAppliance, knownBrands, knownTypes, associateApplicancesToPartReference, knownPartReferences } = useAppliances();
 
   useEffect(() => {
     if (editingField && editInputRef.current) {
@@ -177,7 +179,36 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
 
   const handleShowCompatibleParts = (appliance: Appliance) => {
     setSelectedApplianceForParts(appliance);
+    setNewPartReference("");
     setShowCompatibleDialog(true);
+  };
+
+  const handleAddCompatiblePart = () => {
+    if (!selectedApplianceForParts || !newPartReference.trim()) {
+      toast({
+        title: "Erreur",
+        description: "Veuillez entrer une référence de pièce valide",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Associer l'appareil à la nouvelle référence de pièce
+    associateApplicancesToPartReference([selectedApplianceForParts.id], newPartReference);
+    
+    toast({
+      title: "Pièce compatible ajoutée",
+      description: `L'appareil ${selectedApplianceForParts.reference} est maintenant compatible avec la pièce ${newPartReference}.`,
+    });
+
+    setNewPartReference("");
+    // Actualiser le dialogue
+    setSelectedApplianceForParts({...selectedApplianceForParts});
+  };
+
+  const getCompatiblePartsCount = (applianceId: string): number => {
+    const references = getPartReferencesForAppliance(applianceId);
+    return references.length;
   };
 
   const compatiblePartReferences = selectedApplianceForParts 
@@ -227,6 +258,9 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
                     sortDirection === "asc" ? <ChevronUp className="inline ml-1 h-4 w-4" /> : <ChevronDown className="inline ml-1 h-4 w-4" />
                   )}
                 </TableHead>
+                <TableHead className="text-center">
+                  Pièces compatibles
+                </TableHead>
                 <TableHead className="text-right w-16">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -255,6 +289,9 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
                         <option key={type} value={type} />
                       ))}
                     </datalist>
+                  </TableCell>
+                  <TableCell className="text-center">
+                    -
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
@@ -361,38 +398,20 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
                       ))}
                     </datalist>
                   </TableCell>
+                  <TableCell className="text-center">
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={() => handleShowCompatibleParts(appliance)}
+                      className="text-blue-600 hover:text-blue-800"
+                    >
+                      {getCompatiblePartsCount(appliance.id) || 0}
+                    </Button>
+                  </TableCell>
                   <TableCell className="text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon">
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                        <DropdownMenuItem onClick={() => handleCellDoubleClick(appliance, "brand")}>
-                          <Pencil className="mr-2 h-4 w-4" />
-                          Modifier la marque
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleCellDoubleClick(appliance, "type")}>
-                          <Pencil className="mr-2 h-4 w-4" />
-                          Modifier le type
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={() => handleShowCompatibleParts(appliance)}>
-                          <Tag className="mr-2 h-4 w-4" />
-                          Pièces compatibles
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem 
-                          onClick={() => onDelete(appliance.id)}
-                          className="text-red-600 focus:text-red-600"
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          Supprimer
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    <Button variant="ghost" size="icon" onClick={() => handleShowCompatibleParts(appliance)}>
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))}
@@ -401,34 +420,60 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
         </div>
 
         <Dialog open={showCompatibleDialog} onOpenChange={setShowCompatibleDialog}>
-          <DialogContent>
+          <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle>Pièces compatibles</DialogTitle>
               <DialogDescription>
                 {selectedApplianceForParts && (
                   <span>
-                    Liste des pièces compatibles avec l'appareil <strong>{selectedApplianceForParts.brand} {selectedApplianceForParts.reference}</strong>
+                    Gérer les pièces compatibles avec l'appareil <strong>{selectedApplianceForParts.brand} {selectedApplianceForParts.reference}</strong>
                   </span>
                 )}
               </DialogDescription>
             </DialogHeader>
             
-            {compatiblePartReferences.length > 0 ? (
-              <div className="mt-4">
-                <h3 className="text-sm font-medium mb-2">Références de pièces compatibles:</h3>
-                <div className="flex flex-wrap gap-2">
-                  {compatiblePartReferences.map(ref => (
-                    <Badge key={ref} variant="outline">{ref}</Badge>
-                  ))}
+            <div className="space-y-4 py-2">
+              <div className="flex items-end gap-2">
+                <div className="flex-1">
+                  <Label htmlFor="newPartReference" className="mb-1 block">Ajouter une référence de pièce</Label>
+                  <Input
+                    id="newPartReference"
+                    value={newPartReference}
+                    onChange={(e) => setNewPartReference(e.target.value)}
+                    placeholder="Ex: XYZ123"
+                    list="known-parts"
+                  />
+                  <datalist id="known-parts">
+                    {knownPartReferences.map(ref => (
+                      <option key={ref} value={ref} />
+                    ))}
+                  </datalist>
                 </div>
+                <Button onClick={handleAddCompatiblePart} className="mb-px">
+                  <Plus className="h-4 w-4 mr-1" />
+                  Ajouter
+                </Button>
               </div>
-            ) : (
-              <div className="py-4 text-center text-gray-500">
-                Aucune pièce compatible trouvée pour cet appareil.
-              </div>
-            )}
+              
+              {compatiblePartReferences.length > 0 ? (
+                <div>
+                  <h3 className="text-sm font-medium mb-2">Références de pièces compatibles:</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {compatiblePartReferences.map(ref => (
+                      <Badge key={ref} variant="outline">{ref}</Badge>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="py-4 text-center text-gray-500">
+                  Aucune pièce compatible trouvée pour cet appareil.
+                </div>
+              )}
+            </div>
             
-            <Button className="mt-2" onClick={() => setShowCompatibleDialog(false)}>Fermer</Button>
+            <DialogFooter>
+              <Button onClick={() => setShowCompatibleDialog(false)}>Fermer</Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </CardContent>
