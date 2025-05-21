@@ -1,4 +1,3 @@
-
 import { Appliance, ImportResult } from "@/types/appliance";
 
 /**
@@ -18,8 +17,8 @@ export function parseClipboardData(data: string): ImportResult {
   }
 
   // Déterminer le séparateur et le format des données
-  const separators = ["\t", ";", ",", /\s{2,}/];
-  let bestSeparator = "\t"; // Par défaut
+  const separators = ["\t", ";", ",", /\s{2,}/] as const;
+  let bestSeparator: string | RegExp = "\t"; // Par défaut
   let columnCount = 0;
   let detectedAppliances: Appliance[] = [];
 
@@ -30,7 +29,7 @@ export function parseClipboardData(data: string): ImportResult {
       // Pour chaque séparateur, on compte le nombre de colonnes moyen
       const firstLine = typeof sep === 'string' 
         ? lines[0].split(sep) 
-        : lines[0].split(sep as RegExp);
+        : lines[0].split(sep);
       
       // Si on obtient plus d'appareils ou plus de colonnes, on considère ce séparateur meilleur
       if (testAppliances.length > detectedAppliances.length || firstLine.length > columnCount) {

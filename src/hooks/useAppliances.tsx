@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from "react";
-import { Appliance } from "../types/appliance";
+import { Appliance, ImportSession } from "../types/appliance";
 import { defaultAppliances } from "../data/defaultAppliances";
 
 export const useAppliances = () => {
@@ -9,6 +9,8 @@ export const useAppliances = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [knownBrands, setKnownBrands] = useState<string[]>([]);
   const [knownTypes, setKnownTypes] = useState<string[]>([]);
+  const [knownPartReferences, setKnownPartReferences] = useState<string[]>([]);
+  const [needsUpdate, setNeedsUpdate] = useState<Appliance[]>([]);
 
   // Charger les données depuis le localStorage ou utiliser les données par défaut
   useEffect(() => {
@@ -17,6 +19,12 @@ export const useAppliances = () => {
       setAppliances(JSON.parse(savedAppliances));
     } else {
       setAppliances(defaultAppliances);
+    }
+    
+    // Charger les références de pièces connues
+    const savedPartRefs = localStorage.getItem("knownPartReferences");
+    if (savedPartRefs) {
+      setKnownPartReferences(JSON.parse(savedPartRefs));
     }
   }, []);
 
@@ -33,11 +41,25 @@ export const useAppliances = () => {
     const types = [...new Set(appliances.map(item => item.type))];
     setKnownBrands(brands);
     setKnownTypes(types);
+    
+    // Identifier les appareils qui nécessitent une mise à jour
+    const appliancesNeedingUpdate = appliances.filter(
+      item => !item.brand || item.brand.trim() === "" || !item.type || item.type.trim() === ""
+    );
+    setNeedsUpdate(appliancesNeedingUpdate);
   }, [appliances]);
 
   // Filtrer les appareils en fonction de la recherche
   useEffect(() => {
     if (searchQuery) {
+      // Vérifier si la recherche correspond à une référence de pièce
+      if (knownPartReferences.includes(searchQuery)) {
+        const appliancesForPart = getAppliancesByPartReference(searchQuery);
+        setFilteredAppliances(appliancesForPart);
+        return;
+      }
+      
+      // Sinon, recherche standard par référence, marque ou type
       const filtered = appliances.filter(
         appliance =>
           appliance.reference.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -49,7 +71,7 @@ export const useAppliances = () => {
     } else {
       setFilteredAppliances(appliances);
     }
-  }, [searchQuery, appliances]);
+  }, [searchQuery, appliances, knownPartReferences]);
 
   // Ajouter un nouvel appareil
   const addAppliance = (newAppliance: Omit<Appliance, "id" | "dateAdded">) => {
@@ -68,6 +90,17 @@ export const useAppliances = () => {
         app.id === updatedAppliance.id ? updatedAppliance : app
       )
     );
+  };
+
+  // Mettre à jour plusieurs appareils à la fois
+  const updateMultipleAppliances = (ids: string[], updates: Partial<Appliance>) => {
+    setAppliances(prev => 
+      prev.map(app => 
+        ids.includes(app.id) ? { ...app, ...updates } : app
+      )
+    );
+    
+    return ids.length;
   };
 
   // Importer plusieurs appareils
@@ -92,6 +125,7 @@ export const useAppliances = () => {
   const clearDatabase = () => {
     setAppliances([]);
     localStorage.removeItem("appliances");
+    localStorage.removeItem("knownPartReferences");
   };
 
   // Nettoyer la base de données (supprimer les doublons)
@@ -213,20 +247,98 @@ export const useAppliances = () => {
     return null;
   };
 
+  // Associer des appareils à une référence de pièce
+  const associateApplicancesToPartReference = (applianceIds: string[], partReference: string) => {
+    // Sauvegarder la référence de pièce si elle n'existe pas déjà
+    if (!knownPartReferences.includes(partReference)) {
+      const updatedRefs = [...knownPartReferences, partReference];
+      setKnownPartReferences(updatedRefs);
+      localStorage.setItem("knownPartReferences", JSON.stringify(updatedRefs));
+    }
+    
+    // Créer ou mettre à jour la session d'importation
+    const selectedAppliances = appliances.filter(app => applianceIds.includes(app.id));
+    
+    const importSession: ImportSession = {
+      partReference,
+      appliances: selectedAppliances,
+      createdAt: new Date().toISOString()
+    };
+    
+    // Sauvegarder dans le localStorage
+    localStorage.setItem(`partRef_${partReference}`, JSON.stringify(importSession));
+    
+    return selectedAppliances.length;
+  };
+
+  // Récupérer les appareils compatibles avec une référence de pièce
+  const getAppliancesByPartReference = (partReference: string): Appliance[] => {
+    const sessionStr = localStorage.getItem(`partRef_${partReference}`);
+    if (!sessionStr) return [];
+    
+    try {
+      const session: ImportSession = JSON.parse(sessionStr);
+      
+      // Vérifier que ces appareils existent toujours dans la base
+      const applianceRefs = new Set(session.appliances.map(app => app.reference));
+      const currentAppliances = appliances.filter(app => applianceRefs.has(app.reference));
+      
+      return currentAppliances;
+    } catch (e) {
+      console.error(`Erreur lors de la récupération des appareils pour ${partReference}:`, e);
+      return [];
+    }
+  };
+
+  // Récupérer les références de pièces compatibles avec un appareil
+  const getPartReferencesForAppliance = (applianceId: string): string[] => {
+    const targetAppliance = appliances.find(app => app.id === applianceId);
+    if (!targetAppliance) return [];
+    
+    const compatibleRefs: string[] = [];
+    
+    knownPartReferences.forEach(ref => {
+      const sessionStr = localStorage.getItem(`partRef_${ref}`);
+      if (sessionStr) {
+        try {
+          const session: ImportSession = JSON.parse(sessionStr);
+          const isCompatible = session.appliances.some(
+            app => app.reference === targetAppliance.reference
+          );
+          
+          if (isCompatible) {
+            compatibleRefs.push(ref);
+          }
+        } catch (e) {
+          console.error(`Erreur avec la référence ${ref}:`, e);
+        }
+      }
+    });
+    
+    return compatibleRefs;
+  };
+
   return {
     appliances: filteredAppliances,
     allAppliances: appliances,
+    needsUpdateCount: needsUpdate.length,
+    appliancesNeedingUpdate: needsUpdate,
     searchQuery,
     setSearchQuery,
     addAppliance,
     updateAppliance,
+    updateMultipleAppliances,
     importAppliances,
     deleteAppliance,
     clearDatabase,
     cleanDatabase,
     knownBrands,
     knownTypes,
+    knownPartReferences,
     suggestBrand,
-    suggestType
+    suggestType,
+    associateApplicancesToPartReference,
+    getAppliancesByPartReference,
+    getPartReferencesForAppliance
   };
 };

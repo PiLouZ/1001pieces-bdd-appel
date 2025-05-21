@@ -8,6 +8,7 @@ export interface Appliance {
   dateAdded: string;
   source?: string; // Pour savoir d'où vient l'information (copié/collé, PDF, saisie manuelle)
   additionalInfo?: string; // Pour stocker des informations supplémentaires si nécessaire
+  lastUpdated?: string; // Date de dernière mise à jour
 }
 
 export type ImportSource = "clipboard" | "pdf" | "manual";
@@ -31,4 +32,13 @@ export interface ImportSession {
   partReference: string;
   appliances: Appliance[];
   createdAt: string;
+}
+
+export interface ApplianceEditable {
+  value: string;
+  isEditing: boolean;
+}
+
+export interface ApplianceSelection {
+  [id: string]: boolean;
 }

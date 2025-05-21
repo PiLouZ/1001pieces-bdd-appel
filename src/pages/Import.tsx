@@ -1,3 +1,4 @@
+
 import React, { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Navigation from "@/components/Navigation";
@@ -11,6 +12,14 @@ import { Button } from "@/components/ui/button";
 import { generateCSV, downloadFile } from "@/utils/exportUtils";
 import { Link } from "react-router-dom";
 import { FileText, Import as ImportIcon } from "lucide-react";
+import { 
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 const Import: React.FC = () => {
   const { importAppliances, knownBrands, knownTypes, suggestBrand, suggestType } = useAppliances();
@@ -18,22 +27,21 @@ const Import: React.FC = () => {
   const [partReference, setPartReference] = useState("");
   const [importedAppliances, setImportedAppliances] = useState<Appliance[] | null>(null);
   const [showExportOption, setShowExportOption] = useState(false);
+  const [showReferenceDialog, setShowReferenceDialog] = useState(false);
+  const [pendingAppliances, setPendingAppliances] = useState<Appliance[]>([]);
+  const [isTwoColumnFormat, setIsTwoColumnFormat] = useState(false);
 
-  const handleImport = (appliances: Appliance[]) => {
-    if (!partReference.trim()) {
-      toast({
-        title: "Erreur",
-        description: "Veuillez spécifier une référence de pièce",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    // Pour le format à 2 colonnes, on essaie de compléter les marques et types
-    const isTwoColumnsImport = appliances.some(app => !app.brand || !app.type);
-    
-    if (isTwoColumnsImport) {
-      // Compléter automatiquement les marques et types quand c'est possible
+  const processImport = (appliances: Appliance[], isTwoColumns: boolean) => {
+    // Pour le format à 2 colonnes, on demande la référence si nécessaire
+    if (isTwoColumns) {
+      if (!partReference.trim()) {
+        setPendingAppliances(appliances);
+        setIsTwoColumnFormat(true);
+        setShowReferenceDialog(true);
+        return;
+      }
+      
+      // Compléter automatiquement les marques et types
       const completedAppliances = appliances.map(appliance => {
         let updatedAppliance = { ...appliance };
         
@@ -84,16 +92,8 @@ const Import: React.FC = () => {
       setImportedAppliances(completedAppliances);
       setShowExportOption(true);
     } else {
-      // Stocker la référence de la pièce dans une session temporaire (via localStorage)
-      const importSession: ImportSession = {
-        partReference,
-        appliances,
-        createdAt: new Date().toISOString()
-      };
-      
-      localStorage.setItem("lastImportSession", JSON.stringify(importSession));
-      
-      // Ajouter les appareils à la base de données
+      // Format à 4 colonnes - pas besoin de référence de pièce
+      // Ajouter directement les appareils à la base de données
       const importedCount = importAppliances(appliances);
       
       toast({
@@ -112,6 +112,31 @@ const Import: React.FC = () => {
       setImportedAppliances(null);
       setShowExportOption(false);
     }
+  };
+
+  const handleImport = (appliances: Appliance[]) => {
+    // Vérifier s'il s'agit d'un format à 2 colonnes
+    const is2ColFormat = appliances.every(app => 
+      app.reference && (app.commercialRef !== undefined) && 
+      (!app.brand || app.brand.trim() === "") && 
+      (!app.type || app.type.trim() === "")
+    );
+    
+    processImport(appliances, is2ColFormat);
+  };
+
+  const confirmPartReference = () => {
+    if (!partReference.trim()) {
+      toast({
+        title: "Erreur",
+        description: "Veuillez spécifier une référence de pièce",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setShowReferenceDialog(false);
+    processImport(pendingAppliances, isTwoColumnFormat);
   };
 
   const handleExportImported = () => {
@@ -151,29 +176,31 @@ const Import: React.FC = () => {
           Importer des appareils
         </h1>
         
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>Information sur la pièce</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="grid w-full max-w-sm items-center gap-1.5">
-                <Label htmlFor="partReference">Référence de la pièce</Label>
-                <Input
-                  id="partReference"
-                  type="text"
-                  value={partReference}
-                  onChange={(e) => setPartReference(e.target.value)}
-                  placeholder="Ex: XYZ123"
-                  className="w-full"
-                />
-                <p className="text-sm text-gray-500">
-                  Cette référence sera associée aux appareils importés pour la génération de fichiers.
-                </p>
+        {!isTwoColumnFormat && (
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle>Information sur la pièce (Format 2 colonnes uniquement)</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="grid w-full max-w-sm items-center gap-1.5">
+                  <Label htmlFor="partReference">Référence de la pièce</Label>
+                  <Input
+                    id="partReference"
+                    type="text"
+                    value={partReference}
+                    onChange={(e) => setPartReference(e.target.value)}
+                    placeholder="Ex: XYZ123"
+                    className="w-full"
+                  />
+                  <p className="text-sm text-gray-500">
+                    Cette référence sera associée aux appareils importés en format 2 colonnes pour la génération de fichiers.
+                  </p>
+                </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
         
         <ImportForm 
           onImport={handleImport} 
@@ -208,6 +235,35 @@ const Import: React.FC = () => {
           </Card>
         )}
       </main>
+      
+      <Dialog open={showReferenceDialog} onOpenChange={setShowReferenceDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Référence de pièce requise</DialogTitle>
+            <DialogDescription>
+              Vous importez des données au format 2 colonnes. Veuillez spécifier une référence de pièce pour ces appareils.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="partRefDialog" className="col-span-4">
+                Référence de la pièce
+              </Label>
+              <Input
+                id="partRefDialog"
+                value={partReference}
+                onChange={(e) => setPartReference(e.target.value)}
+                placeholder="Ex: XYZ123"
+                className="col-span-4"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowReferenceDialog(false)}>Annuler</Button>
+            <Button onClick={confirmPartReference}>Confirmer</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       
       <footer className="bg-gray-100 p-4 text-center text-gray-600">
         <p>© {new Date().getFullYear()} - Gestionnaire d'Appareils Électroménagers</p>
