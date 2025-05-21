@@ -1,15 +1,32 @@
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Navigation from "@/components/Navigation";
 import ApplianceList from "@/components/ApplianceList";
 import SearchBar from "@/components/SearchBar";
 import { useAppliances } from "@/hooks/useAppliances";
-import { Database, FileText, Filter } from "lucide-react";
-import { ApplianceSelection } from "@/types/appliance";
+import { Database, FileText, Filter, AlertCircle } from "lucide-react";
+import { Appliance, ApplianceSelection } from "@/types/appliance";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
+
+interface Inconsistency {
+  reference: string;
+  appliances: Appliance[];
+  type: "brand" | "type" | "both";
+}
 
 const Appliances: React.FC = () => {
   const { 
@@ -21,16 +38,190 @@ const Appliances: React.FC = () => {
     updateMultipleAppliances,
     appliancesNeedingUpdate,
     needsUpdateCount,
-    knownPartReferences
+    knownPartReferences,
+    allAppliances,
   } = useAppliances();
   
   const [selectedAppliances, setSelectedAppliances] = useState<ApplianceSelection>({});
   const [showNeedingUpdate, setShowNeedingUpdate] = useState(false);
   const { toast } = useToast();
+  const [inconsistencies, setInconsistencies] = useState<Inconsistency[]>([]);
+  const [showInconsistenciesDialog, setShowInconsistenciesDialog] = useState(false);
+  const [currentInconsistencyIndex, setCurrentInconsistencyIndex] = useState(0);
+  const [selectedResolution, setSelectedResolution] = useState<{[reference: string]: string}>({});
 
   const displayedAppliances = showNeedingUpdate ? appliancesNeedingUpdate : appliances;
   const selectedCount = Object.values(selectedAppliances).filter(Boolean).length;
   
+  // Fonction pour détecter les incohérences
+  useEffect(() => {
+    if (allAppliances.length > 0) {
+      detectInconsistencies();
+    }
+  }, [allAppliances]);
+
+  const detectInconsistencies = () => {
+    const referenceMap: { [key: string]: Appliance[] } = {};
+    
+    // Regrouper les appareils par référence technique
+    allAppliances.forEach(appliance => {
+      if (!referenceMap[appliance.reference]) {
+        referenceMap[appliance.reference] = [];
+      }
+      referenceMap[appliance.reference].push(appliance);
+    });
+    
+    const foundInconsistencies: Inconsistency[] = [];
+    
+    // Analyser chaque groupe pour trouver les incohérences
+    Object.entries(referenceMap).forEach(([reference, applianceGroup]) => {
+      if (applianceGroup.length > 1) {
+        // Vérifier s'il y a des marques ou des types différents
+        const brands = new Set(applianceGroup.map(app => app.brand));
+        const types = new Set(applianceGroup.map(app => app.type));
+        
+        if (brands.size > 1 && types.size > 1) {
+          foundInconsistencies.push({
+            reference,
+            appliances: applianceGroup,
+            type: "both"
+          });
+        } else if (brands.size > 1) {
+          foundInconsistencies.push({
+            reference,
+            appliances: applianceGroup,
+            type: "brand"
+          });
+        } else if (types.size > 1) {
+          foundInconsistencies.push({
+            reference,
+            appliances: applianceGroup,
+            type: "type"
+          });
+        }
+      }
+    });
+    
+    setInconsistencies(foundInconsistencies);
+  };
+
+  const handleCheckInconsistencies = () => {
+    detectInconsistencies();
+    
+    if (inconsistencies.length > 0) {
+      setCurrentInconsistencyIndex(0);
+      setShowInconsistenciesDialog(true);
+    } else {
+      toast({
+        title: "Base de données cohérente",
+        description: "Aucune incohérence n'a été détectée dans la base de données.",
+      });
+    }
+  };
+
+  const currentInconsistency = inconsistencies[currentInconsistencyIndex];
+
+  const handleResolveInconsistency = () => {
+    if (!currentInconsistency) return;
+    
+    const { reference, appliances, type } = currentInconsistency;
+    const selectedId = selectedResolution[reference];
+    const selectedAppliance = appliances.find(app => app.id === selectedId);
+    
+    if (!selectedAppliance) {
+      toast({
+        title: "Erreur",
+        description: "Veuillez sélectionner une option à conserver.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    // Obtenir les IDs de tous les appareils à mettre à jour (sauf celui qui est sélectionné)
+    const applianceIdsToUpdate = appliances
+      .filter(app => app.id !== selectedId)
+      .map(app => app.id);
+    
+    if (type === "brand" || type === "both") {
+      updateMultipleAppliances(applianceIdsToUpdate, { brand: selectedAppliance.brand });
+    }
+    
+    if (type === "type" || type === "both") {
+      updateMultipleAppliances(applianceIdsToUpdate, { type: selectedAppliance.type });
+    }
+    
+    toast({
+      title: "Incohérence résolue",
+      description: `Les appareils avec la référence ${reference} ont été mis à jour.`,
+    });
+    
+    // Passer à la prochaine incohérence ou fermer la boîte de dialogue
+    if (currentInconsistencyIndex < inconsistencies.length - 1) {
+      setCurrentInconsistencyIndex(currentInconsistencyIndex + 1);
+      // Réinitialiser la sélection pour la nouvelle incohérence
+      setSelectedResolution({});
+    } else {
+      setShowInconsistenciesDialog(false);
+      // Réinitialiser l'état
+      setCurrentInconsistencyIndex(0);
+      setSelectedResolution({});
+      // Actualiser la liste des incohérences
+      detectInconsistencies();
+    }
+  };
+
+  const handleMergeInconsistencies = () => {
+    if (!currentInconsistency) return;
+    
+    const { reference, appliances } = currentInconsistency;
+    const selectedId = selectedResolution[reference];
+    const selectedAppliance = appliances.find(app => app.id === selectedId);
+    
+    if (!selectedAppliance) {
+      toast({
+        title: "Erreur",
+        description: "Veuillez sélectionner une option à conserver.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    // Obtenir les IDs de tous les appareils à supprimer (sauf celui qui est sélectionné)
+    const applianceIdsToDelete = appliances
+      .filter(app => app.id !== selectedId)
+      .map(app => app.id);
+    
+    // Supprimer les appareils en double
+    applianceIdsToDelete.forEach(id => deleteAppliance(id));
+    
+    toast({
+      title: "Fusion effectuée",
+      description: `Les doublons avec la référence ${reference} ont été supprimés.`,
+    });
+    
+    // Passer à la prochaine incohérence ou fermer la boîte de dialogue
+    if (currentInconsistencyIndex < inconsistencies.length - 1) {
+      setCurrentInconsistencyIndex(currentInconsistencyIndex + 1);
+      // Réinitialiser la sélection pour la nouvelle incohérence
+      setSelectedResolution({});
+    } else {
+      setShowInconsistenciesDialog(false);
+      // Réinitialiser l'état
+      setCurrentInconsistencyIndex(0);
+      setSelectedResolution({});
+      // Actualiser la liste des incohérences
+      detectInconsistencies();
+    }
+  };
+
+  const handleNextInconsistency = () => {
+    if (currentInconsistencyIndex < inconsistencies.length - 1) {
+      setCurrentInconsistencyIndex(currentInconsistencyIndex + 1);
+      // Réinitialiser la sélection pour la nouvelle incohérence
+      setSelectedResolution({});
+    }
+  };
+
   const handleSelectAppliance = (id: string, selected: boolean) => {
     setSelectedAppliances(prev => ({
       ...prev,
@@ -98,7 +289,7 @@ const Appliances: React.FC = () => {
         </div>
         
         <div className="mb-4 flex flex-col sm:flex-row gap-2 items-start sm:items-center justify-between">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <Button 
               variant={showNeedingUpdate ? "default" : "outline"} 
               size="sm"
@@ -110,6 +301,21 @@ const Appliances: React.FC = () => {
               {needsUpdateCount > 0 && (
                 <Badge variant="destructive" className="ml-1">
                   {needsUpdateCount}
+                </Badge>
+              )}
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleCheckInconsistencies}
+              className="flex items-center gap-1"
+            >
+              <AlertCircle className="h-4 w-4" />
+              Vérifier les incohérences
+              {inconsistencies.length > 0 && (
+                <Badge variant="destructive" className="ml-1">
+                  {inconsistencies.length}
                 </Badge>
               )}
             </Button>
@@ -156,6 +362,95 @@ const Appliances: React.FC = () => {
           </Card>
         </div>
       </main>
+      
+      <Dialog open={showInconsistenciesDialog} onOpenChange={setShowInconsistenciesDialog}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Résoudre les incohérences</DialogTitle>
+            <DialogDescription>
+              {inconsistencies.length > 0 && (
+                <div className="text-sm">
+                  Incohérence {currentInconsistencyIndex + 1} sur {inconsistencies.length} : 
+                  La référence <strong>{currentInconsistency?.reference}</strong> apparaît plusieurs fois avec
+                  {currentInconsistency?.type === "brand" && " des marques différentes."}
+                  {currentInconsistency?.type === "type" && " des types d'appareil différents."}
+                  {currentInconsistency?.type === "both" && " des marques et des types d'appareil différents."}
+                </div>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          {currentInconsistency && (
+            <div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-12">Choix</TableHead>
+                    <TableHead>Référence</TableHead>
+                    <TableHead>Référence commerciale</TableHead>
+                    <TableHead>Marque</TableHead>
+                    <TableHead>Type</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {currentInconsistency.appliances.map(app => (
+                    <TableRow key={app.id} className={
+                      selectedResolution[currentInconsistency.reference] === app.id ? "bg-blue-50" : ""
+                    }>
+                      <TableCell>
+                        <RadioGroup
+                          value={selectedResolution[currentInconsistency.reference]}
+                          onValueChange={(value) => setSelectedResolution({
+                            ...selectedResolution,
+                            [currentInconsistency.reference]: value
+                          })}
+                        >
+                          <div className="flex items-center space-x-2">
+                            <RadioGroupItem value={app.id} id={`radio-${app.id}`} />
+                          </div>
+                        </RadioGroup>
+                      </TableCell>
+                      <TableCell className="font-medium">{app.reference}</TableCell>
+                      <TableCell>{app.commercialRef || "-"}</TableCell>
+                      <TableCell>{app.brand || "-"}</TableCell>
+                      <TableCell>{app.type || "-"}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+
+              <div className="mt-4 text-sm text-gray-600">
+                <p className="mb-2">Options de résolution :</p>
+                <ul className="list-disc ml-5 space-y-1">
+                  <li><strong>Corriger</strong> : Conserver tous les appareils mais uniformiser les données (marque/type) en fonction de l'option sélectionnée.</li>
+                  <li><strong>Fusionner</strong> : Conserver uniquement l'appareil sélectionné et supprimer les doublons.</li>
+                </ul>
+              </div>
+            </div>
+          )}
+          
+          <DialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-between sm:space-x-2">
+            <div className="flex space-x-2 mt-2 sm:mt-0">
+              <Button variant="outline" onClick={() => setShowInconsistenciesDialog(false)}>
+                Annuler
+              </Button>
+              {inconsistencies.length > 1 && currentInconsistencyIndex < inconsistencies.length - 1 && (
+                <Button variant="outline" onClick={handleNextInconsistency}>
+                  Ignorer / Suivant
+                </Button>
+              )}
+            </div>
+            <div className="flex space-x-2">
+              <Button onClick={handleResolveInconsistency}>
+                Corriger
+              </Button>
+              <Button variant="destructive" onClick={handleMergeInconsistencies}>
+                Fusionner
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       
       <footer className="bg-gray-100 p-4 text-center text-gray-600">
         <p>© {new Date().getFullYear()} - Gestionnaire d'Appareils Électroménagers</p>
