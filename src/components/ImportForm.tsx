@@ -128,15 +128,15 @@ const ImportForm: React.FC<ImportFormProps> = ({ onImport, knownBrands, knownTyp
 
   return (
     <Card className="w-full">
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle>Données des appareils</CardTitle>
-        <TabsList>
-          <TabsTrigger value="clipboard">Copier/Coller</TabsTrigger>
-          <TabsTrigger value="pdf">PDF</TabsTrigger>
-        </TabsList>
-      </CardHeader>
-      <CardContent>
-        <Tabs defaultValue="clipboard">
+      <Tabs defaultValue="clipboard">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>Données des appareils</CardTitle>
+          <TabsList>
+            <TabsTrigger value="clipboard">Copier/Coller</TabsTrigger>
+            <TabsTrigger value="pdf">PDF</TabsTrigger>
+          </TabsList>
+        </CardHeader>
+        <CardContent>
           <TabsContent value="clipboard">
             <div className="space-y-4">
               <Textarea
@@ -212,8 +212,8 @@ const ImportForm: React.FC<ImportFormProps> = ({ onImport, knownBrands, knownTyp
               </p>
             </div>
           </TabsContent>
-        </Tabs>
-      </CardContent>
+        </CardContent>
+      </Tabs>
     </Card>
   );
 };
