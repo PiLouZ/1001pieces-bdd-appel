@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from "react";
 import { 
   Table, 
@@ -70,6 +71,7 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
   const [showCompatibleDialog, setShowCompatibleDialog] = useState(false);
   const [selectedApplianceForParts, setSelectedApplianceForParts] = useState<Appliance | null>(null);
   const [newPartReference, setNewPartReference] = useState("");
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
   const bulkInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -206,6 +208,25 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
     setSelectedApplianceForParts({...selectedApplianceForParts});
   };
 
+  const handleDeleteClick = (id: string) => {
+    setConfirmDeleteId(id);
+  };
+
+  const confirmDelete = () => {
+    if (confirmDeleteId) {
+      onDelete(confirmDeleteId);
+      setConfirmDeleteId(null);
+      toast({
+        title: "Appareil supprimé",
+        description: "L'appareil a été supprimé de la base de données.",
+      });
+    }
+  };
+
+  const cancelDelete = () => {
+    setConfirmDeleteId(null);
+  };
+
   const getCompatiblePartsCount = (applianceId: string): number => {
     const references = getPartReferencesForAppliance(applianceId);
     return references.length;
@@ -214,6 +235,22 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
   const compatiblePartReferences = selectedApplianceForParts 
     ? getPartReferencesForAppliance(selectedApplianceForParts.id)
     : [];
+
+  const showBulkOptions = (field: "brand" | "type") => {
+    // Vérifier qu'au moins un appareil est sélectionné
+    const selectedCount = Object.values(selected).filter(Boolean).length;
+    if (selectedCount === 0) {
+      toast({
+        title: "Aucun appareil sélectionné",
+        description: "Veuillez sélectionner au moins un appareil à modifier.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setBulkUpdateField(field);
+    setBulkUpdateValue("");
+  };
 
   return (
     <Card className="w-full">
@@ -251,11 +288,31 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
                   {sortField === "brand" && (
                     sortDirection === "asc" ? <ChevronUp className="inline ml-1 h-4 w-4" /> : <ChevronDown className="inline ml-1 h-4 w-4" />
                   )}
+                  {Object.values(selected).some(Boolean) && (
+                    <Button 
+                      size="icon" 
+                      variant="ghost" 
+                      className="ml-2"
+                      onClick={() => showBulkOptions("brand")}
+                    >
+                      <Pencil className="h-3 w-3" />
+                    </Button>
+                  )}
                 </TableHead>
                 <TableHead onClick={() => handleSort("type")} className="cursor-pointer">
                   Type
                   {sortField === "type" && (
                     sortDirection === "asc" ? <ChevronUp className="inline ml-1 h-4 w-4" /> : <ChevronDown className="inline ml-1 h-4 w-4" />
+                  )}
+                  {Object.values(selected).some(Boolean) && (
+                    <Button 
+                      size="icon" 
+                      variant="ghost" 
+                      className="ml-2"
+                      onClick={() => showBulkOptions("type")}
+                    >
+                      <Pencil className="h-3 w-3" />
+                    </Button>
                   )}
                 </TableHead>
                 <TableHead className="text-center">
@@ -409,9 +466,28 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
                     </Button>
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="icon" onClick={() => handleShowCompatibleParts(appliance)}>
-                      <MoreHorizontal className="h-4 w-4" />
-                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                        <DropdownMenuItem onClick={() => handleShowCompatibleParts(appliance)}>
+                          <Tag className="mr-2 h-4 w-4" />
+                          Gérer les pièces compatibles
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem 
+                          onClick={() => handleDeleteClick(appliance.id)}
+                          className="text-red-600"
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Supprimer
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </TableCell>
                 </TableRow>
               ))}
@@ -473,6 +549,21 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
             
             <DialogFooter>
               <Button onClick={() => setShowCompatibleDialog(false)}>Fermer</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={!!confirmDeleteId} onOpenChange={(open) => !open && setConfirmDeleteId(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Confirmer la suppression</DialogTitle>
+              <DialogDescription>
+                Êtes-vous sûr de vouloir supprimer cet appareil ? Cette action ne peut pas être annulée.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={cancelDelete}>Annuler</Button>
+              <Button variant="destructive" onClick={confirmDelete}>Supprimer</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

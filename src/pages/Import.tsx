@@ -20,13 +20,24 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const Import: React.FC = () => {
-  const { importAppliances, knownBrands, knownTypes, suggestBrand, suggestType, associateApplicancesToPartReference } = useAppliances();
+  const { 
+    importAppliances, 
+    knownBrands, 
+    knownTypes, 
+    knownPartReferences,
+    suggestBrand, 
+    suggestType, 
+    associateApplicancesToPartReference 
+  } = useAppliances();
+  
   const { toast } = useToast();
   const [partReference, setPartReference] = useState("");
   const [importedAppliances, setImportedAppliances] = useState<Appliance[] | null>(null);
   const [showExportOption, setShowExportOption] = useState(false);
+  const [showExportDialog, setShowExportDialog] = useState(false);
   const [showReferenceDialog, setShowReferenceDialog] = useState(false);
   const [pendingAppliances, setPendingAppliances] = useState<Appliance[]>([]);
   const [isTwoColumnFormat, setIsTwoColumnFormat] = useState(false);
@@ -88,9 +99,10 @@ const Import: React.FC = () => {
         description: `${importedCount} nouveaux appareils ajoutés et associés à la référence ${partReference}.`,
       });
       
-      // Proposer l'export
+      // Proposer l'export via une boîte de dialogue
       setImportedAppliances(completedAppliances);
-      setShowExportOption(true);
+      setShowExportDialog(true); // Afficher la boîte de dialogue d'abord
+      setShowExportOption(true);  // Puis conserver l'option en bas de page
     } else {
       toast({
         title: "Importation réussie",
@@ -160,6 +172,12 @@ const Import: React.FC = () => {
       title: "Export réussi",
       description: `Le fichier ${fileName} a été généré.`,
     });
+    
+    setShowExportDialog(false);
+  };
+
+  const handleSelectPartReference = (value: string) => {
+    setPartReference(value);
   };
 
   return (
@@ -175,14 +193,35 @@ const Import: React.FC = () => {
         <div className="mb-6">
           <div className="grid w-full items-center gap-1.5">
             <Label htmlFor="partReference">Référence de la pièce (Optionnel pour format 4 colonnes, Obligatoire pour format 2 colonnes)</Label>
-            <Input
-              id="partReference"
-              type="text"
-              value={partReference}
-              onChange={(e) => setPartReference(e.target.value)}
-              placeholder="Ex: XYZ123"
-              className="w-full max-w-sm"
-            />
+            {knownPartReferences.length > 0 ? (
+              <div className="flex gap-2">
+                <Select value={partReference} onValueChange={handleSelectPartReference}>
+                  <SelectTrigger className="w-full max-w-sm">
+                    <SelectValue placeholder="Sélectionner ou saisir une référence" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {knownPartReferences.map(ref => (
+                      <SelectItem key={ref} value={ref}>{ref}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Input
+                  placeholder="Ou saisir une nouvelle référence"
+                  value={partReference}
+                  onChange={(e) => setPartReference(e.target.value)}
+                  className="w-full max-w-sm"
+                />
+              </div>
+            ) : (
+              <Input
+                id="partReference"
+                type="text"
+                value={partReference}
+                onChange={(e) => setPartReference(e.target.value)}
+                placeholder="Ex: XYZ123"
+                className="w-full max-w-sm"
+              />
+            )}
             <p className="text-sm text-gray-500">
               Cette référence sera associée aux appareils importés pour la génération de fichiers de compatibilité.
             </p>
@@ -248,6 +287,29 @@ const Import: React.FC = () => {
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowReferenceDialog(false)}>Annuler</Button>
             <Button onClick={confirmPartReference}>Confirmer</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      <Dialog open={showExportDialog} onOpenChange={setShowExportDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Exportation disponible</DialogTitle>
+            <DialogDescription>
+              Les appareils ont été importés et associés à la référence de pièce <strong>{partReference}</strong>.
+              Voulez-vous exporter la liste de compatibilité maintenant?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-sm text-gray-600">
+              {importedAppliances?.length || 0} appareils sont prêts à être exportés.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowExportDialog(false)}>Plus tard</Button>
+            <Button onClick={handleExportImported}>
+              Exporter ({importedAppliances?.length || 0} appareils)
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -38,13 +38,26 @@ const ImportForm: React.FC<ImportFormProps> = ({ onImport, knownBrands, knownTyp
       if (result.success && result.appliances.length > 0) {
         // Format à 2 colonnes détecté
         if (result.twoColumnsFormat) {
-          onImport(result.appliances);
-          toast({
-            title: "Succès",
-            description: `${result.appliances.length} appareils importés (format à 2 colonnes). Les marques et types seront complétés automatiquement si possible.`,
-          });
-          setClipboardText("");
+          // Vérifier si des informations sont manquantes (marque ou type)
+          const needsCompletion = result.appliances.some(app => 
+            !app.brand || app.brand.trim() === "" || !app.type || app.type.trim() === "");
           
+          if (needsCompletion) {
+            // Montrer le formulaire pour compléter les infos manquantes
+            setAppliancesWithMissingInfo(result.appliances);
+            toast({
+              title: "Information",
+              description: `${result.appliances.length} appareils ont besoin de compléments d'informations.`,
+            });
+          } else {
+            // Toutes les infos sont complètes, importer directement
+            onImport(result.appliances);
+            toast({
+              title: "Succès",
+              description: `${result.appliances.length} appareils importés (format à 2 colonnes).`,
+            });
+            setClipboardText("");
+          }
         } else if (result.missingInfo && result.missingInfo.length > 0) {
           // Format à 4 colonnes mais avec des informations manquantes
           setAppliancesWithMissingInfo(result.missingInfo);
@@ -137,8 +150,8 @@ const ImportForm: React.FC<ImportFormProps> = ({ onImport, knownBrands, knownTyp
           </TabsList>
         </CardHeader>
         <CardContent>
-          <TabsContent value="clipboard">
-            <div className="space-y-4">
+          <div className="grid grid-cols-1 gap-4">
+            <TabsContent value="clipboard" className="space-y-4">
               <Textarea
                 value={clipboardText}
                 onChange={(e) => setClipboardText(e.target.value)}
@@ -146,6 +159,14 @@ const ImportForm: React.FC<ImportFormProps> = ({ onImport, knownBrands, knownTyp
                 placeholder="Collez ici vos données (tableau Excel, texte structuré...)"
                 className="font-mono text-sm"
               />
+              
+              <Button 
+                onClick={handleClipboardImport} 
+                disabled={isLoading || !clipboardText.trim()}
+                className="w-full"
+              >
+                {isLoading ? "Importation..." : "Importer les données"}
+              </Button>
               
               <div className="p-3 bg-gray-50 border rounded-md text-sm">
                 <p className="font-medium">Formats acceptés :</p>
@@ -167,51 +188,43 @@ const ImportForm: React.FC<ImportFormProps> = ({ onImport, knownBrands, knownTyp
                   Note: Dans le format à 2 colonnes, l'outil complètera automatiquement les marques et types s'il les connaît déjà.
                 </p>
               </div>
-              
-              <Button 
-                onClick={handleClipboardImport} 
-                disabled={isLoading || !clipboardText.trim()}
-                className="w-full"
-              >
-                {isLoading ? "Importation..." : "Importer les données"}
-              </Button>
-            </div>
-          </TabsContent>
-          
-          <TabsContent value="pdf">
-            <div className="space-y-4">
-              <div>
-                <p className="text-sm text-gray-600 mb-2">
-                  Sélectionnez un fichier PDF contenant les informations des appareils
-                </p>
-                <div className="flex items-center justify-center w-full">
-                  <label
-                    htmlFor="pdf-file"
-                    className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100"
-                  >
-                    <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                      <p className="mb-2 text-sm text-gray-500">
-                        <span className="font-semibold">Cliquez pour sélectionner</span> ou glissez-déposez
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        PDF (MAX. 10MB)
-                      </p>
-                    </div>
-                    <input 
-                      id="pdf-file" 
-                      type="file" 
-                      className="hidden" 
-                      accept=".pdf" 
-                      onChange={handlePdfImport}
-                    />
-                  </label>
+            </TabsContent>
+            
+            <TabsContent value="pdf">
+              <div className="space-y-4">
+                <div>
+                  <p className="text-sm text-gray-600 mb-2">
+                    Sélectionnez un fichier PDF contenant les informations des appareils
+                  </p>
+                  <div className="flex items-center justify-center w-full">
+                    <label
+                      htmlFor="pdf-file"
+                      className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100"
+                    >
+                      <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                        <p className="mb-2 text-sm text-gray-500">
+                          <span className="font-semibold">Cliquez pour sélectionner</span> ou glissez-déposez
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          PDF (MAX. 10MB)
+                        </p>
+                      </div>
+                      <input 
+                        id="pdf-file" 
+                        type="file" 
+                        className="hidden" 
+                        accept=".pdf" 
+                        onChange={handlePdfImport}
+                      />
+                    </label>
+                  </div>
                 </div>
+                <p className="text-xs text-amber-600 italic">
+                  Note: La fonctionnalité d'importation PDF est en cours de développement.
+                </p>
               </div>
-              <p className="text-xs text-amber-600 italic">
-                Note: La fonctionnalité d'importation PDF est en cours de développement.
-              </p>
-            </div>
-          </TabsContent>
+            </TabsContent>
+          </div>
         </CardContent>
       </Tabs>
     </Card>
