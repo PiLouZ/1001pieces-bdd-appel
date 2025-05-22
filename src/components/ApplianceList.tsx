@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from "react";
 import { 
   Table, 
@@ -206,6 +207,7 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
       
       onBulkDelete(selectedIds);
       
+      // Fix: Changed from object format with title to string + description object
       toastWithProgress("Suppression effectuée", {
         description: `${selectedIds.length} appareil(s) ont été supprimés.`
       });
@@ -227,7 +229,6 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
   const handleAddCompatiblePart = () => {
     if (!selectedApplianceForParts || !newPartReference.trim()) {
       toast({
-        title: "Erreur",
         description: "Veuillez entrer une référence de pièce valide",
         variant: "destructive",
       });
@@ -237,8 +238,8 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
     // Associer l'appareil à la nouvelle référence de pièce
     associateApplicancesToPartReference([selectedApplianceForParts.id], newPartReference);
     
-    toastWithProgress({
-      title: "Pièce compatible ajoutée",
+    // Fix: Changed from object format to string + options format
+    toastWithProgress("Pièce compatible ajoutée", {
       description: `L'appareil ${selectedApplianceForParts.reference} est maintenant compatible avec la pièce ${newPartReference}.`,
     });
 

@@ -46,13 +46,13 @@ const Toaster = ({ ...props }: ToasterProps) => {
             "group-[.toast]:bg-muted group-[.toast]:text-muted-foreground",
         },
       }}
-      {...props as any}
+      {...props}
     />
   )
 }
 
 // Enhanced toast with progress bar
-const toastWithProgress = (message: string | React.ReactNode, options?: any) => {
+const toastWithProgress = (message: string, options?: any) => {
   return sonnerToast(message, {
     duration: 5000,
     ...options,
