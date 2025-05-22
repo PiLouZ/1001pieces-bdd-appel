@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from "react";
-import { Appliance, ImportSession } from "../types/appliance";
+import { Appliance, ImportSession, AppliancePartAssociation } from "../types/appliance";
 import { defaultAppliances } from "../data/defaultAppliances";
 
 export const useAppliances = () => {
@@ -11,6 +11,8 @@ export const useAppliances = () => {
   const [knownTypes, setKnownTypes] = useState<string[]>([]);
   const [knownPartReferences, setKnownPartReferences] = useState<string[]>([]);
   const [needsUpdate, setNeedsUpdate] = useState<Appliance[]>([]);
+  const [appliancePartAssociations, setAppliancePartAssociations] = useState<AppliancePartAssociation[]>([]);
+  const [importSessions, setImportSessions] = useState<Record<string, ImportSession>>({});
 
   // Charger les données depuis le localStorage ou utiliser les données par défaut
   useEffect(() => {
@@ -26,6 +28,18 @@ export const useAppliances = () => {
     if (savedPartRefs) {
       setKnownPartReferences(JSON.parse(savedPartRefs));
     }
+    
+    // Charger les associations entre appareils et références de pièces
+    const savedAssociations = localStorage.getItem("appliancePartAssociations");
+    if (savedAssociations) {
+      setAppliancePartAssociations(JSON.parse(savedAssociations));
+    }
+    
+    // Charger les sessions d'import
+    const savedSessions = localStorage.getItem("importSessions");
+    if (savedSessions) {
+      setImportSessions(JSON.parse(savedSessions));
+    }
   }, []);
 
   // Sauvegarder les données dans le localStorage quand elles changent
@@ -34,11 +48,25 @@ export const useAppliances = () => {
       localStorage.setItem("appliances", JSON.stringify(appliances));
     }
   }, [appliances]);
+  
+  // Sauvegarder les associations quand elles changent
+  useEffect(() => {
+    if (appliancePartAssociations.length > 0) {
+      localStorage.setItem("appliancePartAssociations", JSON.stringify(appliancePartAssociations));
+    }
+  }, [appliancePartAssociations]);
+  
+  // Sauvegarder les sessions d'import quand elles changent
+  useEffect(() => {
+    if (Object.keys(importSessions).length > 0) {
+      localStorage.setItem("importSessions", JSON.stringify(importSessions));
+    }
+  }, [importSessions]);
 
   // Extraire les marques et types connus
   useEffect(() => {
-    const brands = [...new Set(appliances.map(item => item.brand))];
-    const types = [...new Set(appliances.map(item => item.type))];
+    const brands = [...new Set(appliances.map(item => item.brand))].filter(Boolean);
+    const types = [...new Set(appliances.map(item => item.type))].filter(Boolean);
     setKnownBrands(brands);
     setKnownTypes(types);
     
@@ -71,7 +99,7 @@ export const useAppliances = () => {
     } else {
       setFilteredAppliances(appliances);
     }
-  }, [searchQuery, appliances, knownPartReferences]);
+  }, [searchQuery, appliances, knownPartReferences, appliancePartAssociations]);
 
   // Ajouter un nouvel appareil
   const addAppliance = (newAppliance: Omit<Appliance, "id" | "dateAdded">) => {
@@ -81,6 +109,7 @@ export const useAppliances = () => {
       dateAdded: new Date().toISOString().split("T")[0]
     };
     setAppliances(prev => [...prev, applianceToAdd]);
+    return applianceToAdd;
   };
 
   // Modifier un appareil existant
@@ -96,7 +125,7 @@ export const useAppliances = () => {
   const updateMultipleAppliances = (ids: string[], updates: Partial<Appliance>) => {
     setAppliances(prev => 
       prev.map(app => 
-        ids.includes(app.id) ? { ...app, ...updates } : app
+        ids.includes(app.id) ? { ...app, ...updates, lastUpdated: new Date().toISOString() } : app
       )
     );
     
@@ -119,13 +148,22 @@ export const useAppliances = () => {
   // Supprimer un appareil
   const deleteAppliance = (id: string) => {
     setAppliances(prev => prev.filter(appliance => appliance.id !== id));
+    
+    // Supprimer également les associations avec cette référence d'appareil
+    setAppliancePartAssociations(prev => 
+      prev.filter(assoc => assoc.applianceId !== id)
+    );
   };
   
   // Vider complètement la base de données
   const clearDatabase = () => {
     setAppliances([]);
+    setAppliancePartAssociations([]);
+    setImportSessions({});
     localStorage.removeItem("appliances");
     localStorage.removeItem("knownPartReferences");
+    localStorage.removeItem("appliancePartAssociations");
+    localStorage.removeItem("importSessions");
   };
 
   // Nettoyer la base de données (supprimer les doublons)
@@ -150,17 +188,18 @@ export const useAppliances = () => {
   const suggestBrand = (reference: string): string | null => {
     // Chercher une correspondance exacte de référence
     const exactMatch = appliances.find(a => a.reference === reference);
-    if (exactMatch) return exactMatch.brand;
+    if (exactMatch && exactMatch.brand) return exactMatch.brand;
     
     // Chercher par référence commerciale
     const commercialMatch = appliances.find(a => a.commercialRef === reference);
-    if (commercialMatch) return commercialMatch.brand;
+    if (commercialMatch && commercialMatch.brand) return commercialMatch.brand;
     
     // Chercher une correspondance partielle (début de référence)
     const partialMatches = appliances.filter(a => 
-      reference.startsWith(a.reference.substring(0, 3)) || 
-      a.reference.startsWith(reference.substring(0, 3)) ||
-      (a.commercialRef && (
+      (a.reference && reference && 
+        (reference.startsWith(a.reference.substring(0, 3)) || 
+        a.reference.startsWith(reference.substring(0, 3)))) ||
+      (a.commercialRef && reference && (
         reference.startsWith(a.commercialRef.substring(0, 3)) || 
         a.commercialRef.startsWith(reference.substring(0, 3))
       ))
@@ -170,7 +209,9 @@ export const useAppliances = () => {
       // Grouper par marque et prendre la plus fréquente
       const brandCount: Record<string, number> = {};
       partialMatches.forEach(a => {
-        brandCount[a.brand] = (brandCount[a.brand] || 0) + 1;
+        if (a.brand) {
+          brandCount[a.brand] = (brandCount[a.brand] || 0) + 1;
+        }
       });
       
       let maxCount = 0;
@@ -197,9 +238,10 @@ export const useAppliances = () => {
     if (brandMatches.length > 0) {
       // Chercher une correspondance partielle de référence dans la même marque
       const refMatches = brandMatches.filter(a => 
-        reference.startsWith(a.reference.substring(0, 3)) || 
-        a.reference.startsWith(reference.substring(0, 3)) ||
-        (a.commercialRef && (
+        (a.reference && reference && 
+          (reference.startsWith(a.reference.substring(0, 3)) || 
+          a.reference.startsWith(reference.substring(0, 3)))) ||
+        (a.commercialRef && reference && (
           reference.startsWith(a.commercialRef.substring(0, 3)) || 
           a.commercialRef.startsWith(reference.substring(0, 3))
         ))
@@ -209,7 +251,9 @@ export const useAppliances = () => {
         // Grouper par type et prendre le plus fréquent
         const typeCount: Record<string, number> = {};
         refMatches.forEach(a => {
-          typeCount[a.type] = (typeCount[a.type] || 0) + 1;
+          if (a.type) {
+            typeCount[a.type] = (typeCount[a.type] || 0) + 1;
+          }
         });
         
         let maxCount = 0;
@@ -228,7 +272,9 @@ export const useAppliances = () => {
       // Si pas de correspondance de référence, prendre le type le plus courant pour cette marque
       const typeCount: Record<string, number> = {};
       brandMatches.forEach(a => {
-        typeCount[a.type] = (typeCount[a.type] || 0) + 1;
+        if (a.type) {
+          typeCount[a.type] = (typeCount[a.type] || 0) + 1;
+        }
       });
       
       let maxCount = 0;
@@ -256,67 +302,78 @@ export const useAppliances = () => {
       localStorage.setItem("knownPartReferences", JSON.stringify(updatedRefs));
     }
     
-    // Créer ou mettre à jour la session d'importation
-    const selectedAppliances = appliances.filter(app => applianceIds.includes(app.id));
-    
-    const importSession: ImportSession = {
+    // Créer de nouvelles associations
+    const newAssociations: AppliancePartAssociation[] = applianceIds.map(id => ({
+      id: `${id}-${partReference}-${Date.now()}`,
+      applianceId: id,
       partReference,
-      appliances: selectedAppliances,
-      createdAt: new Date().toISOString()
-    };
+      dateAssociated: new Date().toISOString()
+    }));
     
-    // Sauvegarder dans le localStorage
-    localStorage.setItem(`partRef_${partReference}`, JSON.stringify(importSession));
+    // Ajouter les nouvelles associations sans créer de doublons
+    setAppliancePartAssociations(prev => {
+      const existingAssocs = new Set(prev.map(a => `${a.applianceId}-${a.partReference}`));
+      const filteredNewAssocs = newAssociations.filter(
+        na => !existingAssocs.has(`${na.applianceId}-${na.partReference}`)
+      );
+      return [...prev, ...filteredNewAssocs];
+    });
     
-    return selectedAppliances.length;
+    return applianceIds.length;
   };
 
   // Récupérer les appareils compatibles avec une référence de pièce
   const getAppliancesByPartReference = (partReference: string): Appliance[] => {
-    const sessionStr = localStorage.getItem(`partRef_${partReference}`);
-    if (!sessionStr) return [];
+    // Utiliser les associations pour trouver les IDs des appareils compatibles
+    const applianceIds = appliancePartAssociations
+      .filter(a => a.partReference === partReference)
+      .map(a => a.applianceId);
     
-    try {
-      const session: ImportSession = JSON.parse(sessionStr);
-      
-      // Vérifier que ces appareils existent toujours dans la base
-      const applianceRefs = new Set(session.appliances.map(app => app.reference));
-      const currentAppliances = appliances.filter(app => applianceRefs.has(app.reference));
-      
-      return currentAppliances;
-    } catch (e) {
-      console.error(`Erreur lors de la récupération des appareils pour ${partReference}:`, e);
-      return [];
-    }
+    // Récupérer les appareils correspondants
+    return appliances.filter(app => applianceIds.includes(app.id));
   };
 
   // Récupérer les références de pièces compatibles avec un appareil
   const getPartReferencesForAppliance = (applianceId: string): string[] => {
-    const targetAppliance = appliances.find(app => app.id === applianceId);
-    if (!targetAppliance) return [];
-    
-    const compatibleRefs: string[] = [];
-    
-    knownPartReferences.forEach(ref => {
-      const sessionStr = localStorage.getItem(`partRef_${ref}`);
-      if (sessionStr) {
-        try {
-          const session: ImportSession = JSON.parse(sessionStr);
-          const isCompatible = session.appliances.some(
-            app => app.reference === targetAppliance.reference
-          );
-          
-          if (isCompatible) {
-            compatibleRefs.push(ref);
-          }
-        } catch (e) {
-          console.error(`Erreur avec la référence ${ref}:`, e);
-        }
-      }
-    });
-    
-    return compatibleRefs;
+    return appliancePartAssociations
+      .filter(a => a.applianceId === applianceId)
+      .map(a => a.partReference);
   };
+  
+  // Sauvegarder une session d'importation
+  const saveImportSession = (sessionId: string, session: ImportSession) => {
+    setImportSessions(prev => ({
+      ...prev,
+      [sessionId]: session
+    }));
+  };
+  
+  // Récupérer une session d'importation
+  const getImportSession = (sessionId: string): ImportSession | null => {
+    return importSessions[sessionId] || null;
+  };
+  
+  // Supprimer une session d'importation
+  const deleteImportSession = (sessionId: string) => {
+    setImportSessions(prev => {
+      const newSessions = { ...prev };
+      delete newSessions[sessionId];
+      return newSessions;
+    });
+  };
+  
+  // Récupérer les appareils récents (triés par date d'ajout)
+  const recentAppliances = [...appliances]
+    .sort((a, b) => new Date(b.dateAdded).getTime() - new Date(a.dateAdded).getTime());
+  
+  // Récupérer les appareils avec le plus de références de pièces compatibles
+  const appliancesWithMostPartRefs = [...appliances]
+    .map(app => {
+      const partRefCount = appliancePartAssociations.filter(a => a.applianceId === app.id).length;
+      return { ...app, partRefCount };
+    })
+    .sort((a, b) => b.partRefCount - a.partRefCount)
+    .filter(app => app.partRefCount > 0);
 
   return {
     appliances: filteredAppliances,
@@ -339,6 +396,11 @@ export const useAppliances = () => {
     suggestType,
     associateApplicancesToPartReference,
     getAppliancesByPartReference,
-    getPartReferencesForAppliance
+    getPartReferencesForAppliance,
+    saveImportSession,
+    getImportSession,
+    deleteImportSession,
+    recentAppliances,
+    appliancesWithMostPartRefs
   };
 };

@@ -5,11 +5,12 @@ import Navigation from "@/components/Navigation";
 import ApplianceList from "@/components/ApplianceList";
 import SearchBar from "@/components/SearchBar";
 import { useAppliances } from "@/hooks/useAppliances";
-import { Database, FileText, Filter, AlertCircle } from "lucide-react";
+import { Database, FileText, Filter, AlertCircle, Plus, Tag } from "lucide-react";
 import { Appliance, ApplianceSelection } from "@/types/appliance";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -21,6 +22,8 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface Inconsistency {
   reference: string;
@@ -39,7 +42,11 @@ const Appliances: React.FC = () => {
     appliancesNeedingUpdate,
     needsUpdateCount,
     knownPartReferences,
+    knownBrands,
+    knownTypes,
     allAppliances,
+    associateApplicancesToPartReference,
+    getPartReferencesForAppliance
   } = useAppliances();
   
   const [selectedAppliances, setSelectedAppliances] = useState<ApplianceSelection>({});
@@ -49,9 +56,17 @@ const Appliances: React.FC = () => {
   const [showInconsistenciesDialog, setShowInconsistenciesDialog] = useState(false);
   const [currentInconsistencyIndex, setCurrentInconsistencyIndex] = useState(0);
   const [selectedResolution, setSelectedResolution] = useState<{[reference: string]: string}>({});
+  
+  // État pour la gestion de l'association de pièces
+  const [showAddPartDialog, setShowAddPartDialog] = useState(false);
+  const [newPartReference, setNewPartReference] = useState("");
+  const [selectedPartReference, setSelectedPartReference] = useState("");
 
   const displayedAppliances = showNeedingUpdate ? appliancesNeedingUpdate : appliances;
   const selectedCount = Object.values(selectedAppliances).filter(Boolean).length;
+  const selectedIds = Object.entries(selectedAppliances)
+    .filter(([_, selected]) => selected)
+    .map(([id]) => id);
   
   // Fonction pour détecter les incohérences
   useEffect(() => {
@@ -237,14 +252,7 @@ const Appliances: React.FC = () => {
     setSelectedAppliances(newSelection);
   };
   
-  const handleBulkUpdate = (field: keyof Omit<Partial<{
-    brand: string;
-    type: string;
-  }>, "id">, value: string) => {
-    const selectedIds = Object.entries(selectedAppliances)
-      .filter(([_, selected]) => selected)
-      .map(([id]) => id);
-    
+  const handleBulkUpdate = (field: keyof Omit<Partial<Appliance>, "id">, value: string) => {
     if (selectedIds.length === 0) {
       toast({
         title: "Aucun appareil sélectionné",
@@ -267,6 +275,51 @@ const Appliances: React.FC = () => {
   
   const toggleUpdateFilter = () => {
     setShowNeedingUpdate(!showNeedingUpdate);
+  };
+  
+  const handleOpenAddPartDialog = () => {
+    if (selectedIds.length === 0) {
+      toast({
+        title: "Aucun appareil sélectionné",
+        description: "Veuillez sélectionner au moins un appareil pour associer une référence de pièce.",
+        variant: "destructive"
+      });
+      return;
+    }
+    setShowAddPartDialog(true);
+  };
+  
+  const handleAddPartReference = () => {
+    const partRef = selectedPartReference || newPartReference;
+    
+    if (!partRef.trim()) {
+      toast({
+        title: "Erreur",
+        description: "Veuillez spécifier une référence de pièce",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    if (selectedIds.length === 0) {
+      toast({
+        title: "Aucun appareil sélectionné",
+        description: "Veuillez sélectionner au moins un appareil",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    const count = associateApplicancesToPartReference(selectedIds, partRef);
+    
+    toast({
+      title: "Association réussie",
+      description: `${count} appareils ont été associés à la référence de pièce ${partRef}`
+    });
+    
+    setShowAddPartDialog(false);
+    setNewPartReference("");
+    setSelectedPartReference("");
   };
 
   return (
@@ -319,6 +372,18 @@ const Appliances: React.FC = () => {
                 </Badge>
               )}
             </Button>
+            
+            {selectedCount > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleOpenAddPartDialog}
+                className="flex items-center gap-1"
+              >
+                <Tag className="h-4 w-4" />
+                Associer à une référence de pièce
+              </Button>
+            )}
           </div>
           
           {selectedCount > 0 && (
@@ -357,6 +422,7 @@ const Appliances: React.FC = () => {
                 selected={selectedAppliances}
                 onSelectAll={handleSelectAll}
                 onBulkUpdate={handleBulkUpdate}
+                getPartReferencesForAppliance={getPartReferencesForAppliance}
               />
             </CardContent>
           </Card>
@@ -448,6 +514,62 @@ const Appliances: React.FC = () => {
                 Fusionner
               </Button>
             </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      <Dialog open={showAddPartDialog} onOpenChange={setShowAddPartDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Associer à une référence de pièce</DialogTitle>
+            <DialogDescription>
+              Associer les {selectedIds.length} appareils sélectionnés à une référence de pièce.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <div className="space-y-4">
+              <Tabs defaultValue="select">
+                <TabsList className="w-full">
+                  <TabsTrigger value="select" className="flex-1">Référence existante</TabsTrigger>
+                  <TabsTrigger value="new" className="flex-1">Nouvelle référence</TabsTrigger>
+                </TabsList>
+                <TabsContent value="select" className="space-y-4 pt-2">
+                  {knownPartReferences.length > 0 ? (
+                    <Select value={selectedPartReference} onValueChange={setSelectedPartReference}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Sélectionner une référence existante" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {knownPartReferences.map(ref => (
+                          <SelectItem key={ref} value={ref}>{ref}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <p className="text-sm text-gray-500">
+                      Aucune référence de pièce existante. Créez-en une nouvelle.
+                    </p>
+                  )}
+                </TabsContent>
+                <TabsContent value="new" className="space-y-4 pt-2">
+                  <Label htmlFor="newPartReference">Nouvelle référence de pièce</Label>
+                  <Input 
+                    id="newPartReference"
+                    value={newPartReference}
+                    onChange={e => setNewPartReference(e.target.value)}
+                    placeholder="Ex: XYZ123"
+                  />
+                </TabsContent>
+              </Tabs>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAddPartDialog(false)}>
+              Annuler
+            </Button>
+            <Button onClick={handleAddPartReference}>
+              Associer
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

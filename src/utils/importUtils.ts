@@ -1,3 +1,4 @@
+
 import { Appliance, ImportResult } from "@/types/appliance";
 
 /**
@@ -52,7 +53,7 @@ export function parseClipboardData(data: string): ImportResult {
   const isTwoColumnFormat = detectedAppliances.every(app => 
     // Pour le format à 2 colonnes, on a seulement référence et ref commerciale
     app.reference && (app.commercialRef !== undefined) && 
-    !app.brand && !app.type
+    (!app.brand || app.brand.trim() === "") && (!app.type || app.type.trim() === "")
   );
 
   // Pour le format à 2 colonnes, on cherche à compléter les données
@@ -82,22 +83,7 @@ export function parseClipboardData(data: string): ImportResult {
   }
 }
 
-function detectTabSeparated(lines: string[]): Appliance[] {
-  return detectWithSeparator(lines, "\t");
-}
-
-function detectSpaceSeparated(lines: string[]): Appliance[] {
-  return detectWithSeparator(lines, /\s{2,}/);
-}
-
-function detectSemicolonSeparated(lines: string[]): Appliance[] {
-  return detectWithSeparator(lines, ";");
-}
-
-function detectCommaSeparated(lines: string[]): Appliance[] {
-  return detectWithSeparator(lines, ",");
-}
-
+// Détection avec différents séparateurs
 function detectWithSeparator(lines: string[], separator: string | RegExp): Appliance[] {
   const appliances: Appliance[] = [];
   
@@ -176,7 +162,7 @@ function detectWithSeparator(lines: string[], separator: string | RegExp): Appli
       : lines[i].split(separator);
     
     // Format à deux colonnes (références uniquement)
-    if (parts.length === 2 && referenceIndex === -1 && commercialRefIndex === -1) {
+    if (parts.length === 2 && (referenceIndex === -1 || commercialRefIndex === -1)) {
       appliances.push({
         id: Date.now().toString() + i,
         reference: parts[0].trim(),

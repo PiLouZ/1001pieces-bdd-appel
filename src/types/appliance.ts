@@ -29,9 +29,13 @@ export interface ExportOptions {
 
 // Structure pour stocker temporairement les appareils importés
 export interface ImportSession {
-  partReference: string;
-  appliances: Appliance[];
-  createdAt: string;
+  id: string; // Identifiant unique de la session
+  name?: string; // Nom optionnel de la session
+  partReference?: string; // Référence de pièce associée
+  appliances: Appliance[]; // Appareils dans la session
+  incompleteAppliances?: Appliance[]; // Appareils avec données manquantes
+  createdAt: string; // Date de création
+  updatedAt?: string; // Date de dernière modification
 }
 
 export interface ApplianceEditable {
@@ -41,4 +45,12 @@ export interface ApplianceEditable {
 
 export interface ApplianceSelection {
   [id: string]: boolean;
+}
+
+// Association entre un appareil et une référence de pièce
+export interface AppliancePartAssociation {
+  id: string; // ID unique de l'association
+  applianceId: string; // ID de l'appareil
+  partReference: string; // Référence de la pièce
+  dateAssociated: string; // Date de l'association
 }
