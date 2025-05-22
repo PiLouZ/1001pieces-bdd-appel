@@ -13,7 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAppliances } from "@/hooks/useAppliances";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { downloadFile, generateCSV, generateHTML } from "@/utils/exportUtils";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ExportOptions } from "@/types/appliance";
@@ -21,7 +21,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const Export: React.FC = () => {
   const { allAppliances, cleanDatabase, getAppliancesByPartReference, knownPartReferences: appPartRefs } = useAppliances();
-  const { toast } = useToast();
   const [partReference, setPartReference] = useState("");
   const [exportFormat, setExportFormat] = useState<"csv" | "html">("csv");
   const [includeHeader, setIncludeHeader] = useState(true);
@@ -74,12 +73,14 @@ const Export: React.FC = () => {
 
   const handleExportAll = () => {
     try {
+      const options: ExportOptions = { 
+        partReference: "TOUS",
+        format: exportFormat,
+        includeHeader
+      };
+      
       if (exportFormat === "csv") {
-        const csvContent = generateCSV(allAppliances, { 
-          partReference: "TOUS",
-          format: "csv", 
-          includeHeader
-        });
+        const csvContent = generateCSV(allAppliances, options);
         
         downloadFile(
           csvContent,
@@ -87,10 +88,7 @@ const Export: React.FC = () => {
           "text/csv;charset=utf-8"
         );
       } else {
-        const htmlContent = generateHTML(allAppliances, { 
-          partReference: "TOUS",
-          format: "html"
-        });
+        const htmlContent = generateHTML(allAppliances, options);
         
         downloadFile(
           htmlContent,
@@ -209,19 +207,29 @@ const Export: React.FC = () => {
                     <Label htmlFor="partReference">Référence de la pièce</Label>
                     <div className="flex gap-2">
                       <div className="flex-1">
-                        <Select 
-                          value={partReference} 
-                          onValueChange={handlePartReferenceChange}
-                        >
-                          <SelectTrigger className="w-full">
-                            <SelectValue placeholder="Sélectionner une référence de pièce" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {knownPartReferences.map(ref => (
-                              <SelectItem key={ref} value={ref}>{ref}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        {knownPartReferences.length > 0 ? (
+                          <Select 
+                            value={partReference} 
+                            onValueChange={handlePartReferenceChange}
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder="Sélectionner une référence de pièce" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {knownPartReferences.map(ref => (
+                                <SelectItem key={ref} value={ref}>{ref}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <Input 
+                            id="partReference" 
+                            type="text" 
+                            value={partReference} 
+                            onChange={e => handlePartReferenceChange(e.target.value)}
+                            placeholder="Ex: XYZ123" 
+                          />
+                        )}
                       </div>
                       
                       {lastImportedPartRef && lastImportedPartRef !== partReference && (

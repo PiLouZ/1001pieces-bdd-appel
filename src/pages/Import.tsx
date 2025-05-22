@@ -1,11 +1,10 @@
-
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import Navigation from "@/components/Navigation";
 import ImportForm from "@/components/ImportForm";
 import { useAppliances } from "@/hooks/useAppliances";
 import { Appliance, ImportSession } from "@/types/appliance";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -19,6 +18,7 @@ import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@
 
 const Import: React.FC = () => {
   const {
+    appliances,
     importAppliances,
     knownBrands,
     knownTypes,
@@ -30,7 +30,6 @@ const Import: React.FC = () => {
     getImportSession,
     deleteImportSession
   } = useAppliances();
-  const { toast } = useToast();
   
   const [partReference, setPartReference] = useState("");
   const [sessionName, setSessionName] = useState("");
@@ -68,53 +67,76 @@ const Import: React.FC = () => {
       return;
     }
 
-    // Compléter automatiquement les marques et types si nécessaire
-    const completedAppliances: Appliance[] = [];
-    const stillIncompleteAppliances: Appliance[] = [];
-
+    // Préparer les appareils qui nécessitent des informations supplémentaires
+    let appliancesToComplete: Appliance[] = [];
+    let appliancesToImport: Appliance[] = [];
+    
     appliances.forEach(appliance => {
       let updatedAppliance = { ...appliance };
       let isComplete = true;
-
-      // Si la marque est manquante, essayer de la suggérer
-      if (!updatedAppliance.brand || updatedAppliance.brand.trim() === "") {
-        const suggestedBrand = suggestBrand(updatedAppliance.reference);
-        if (suggestedBrand) {
-          updatedAppliance.brand = suggestedBrand;
-        } else {
-          isComplete = false;
-        }
-      }
-
-      // Si le type est manquant et qu'on a une marque, essayer de le suggérer
-      if ((!updatedAppliance.type || updatedAppliance.type.trim() === "") && updatedAppliance.brand) {
-        const suggestedType = suggestType(updatedAppliance.reference, updatedAppliance.brand);
-        if (suggestedType) {
-          updatedAppliance.type = suggestedType;
-        } else {
-          isComplete = false;
-        }
-      }
-
-      if (isComplete || (!updatedAppliance.brand && !updatedAppliance.type)) {
-        completedAppliances.push(updatedAppliance);
+      let foundInDatabase = false;
+      
+      // NOUVEAU: Rechercher si l'appareil existe déjà dans la base
+      const existingAppliance = appliances.find(a => a.reference === updatedAppliance.reference);
+      
+      if (existingAppliance) {
+        // Si l'appareil existe, utiliser ses informations
+        updatedAppliance.brand = existingAppliance.brand;
+        updatedAppliance.type = existingAppliance.type;
+        foundInDatabase = true;
       } else {
-        stillIncompleteAppliances.push(updatedAppliance);
+        // Si la marque est manquante, essayer de la suggérer
+        if (!updatedAppliance.brand || updatedAppliance.brand.trim() === "") {
+          const suggestedBrand = suggestBrand(updatedAppliance.reference);
+          if (suggestedBrand) {
+            updatedAppliance.brand = suggestedBrand;
+          } else {
+            isComplete = false;
+          }
+        }
+
+        // Si le type est manquant et qu'on a une marque, essayer de le suggérer
+        if ((!updatedAppliance.type || updatedAppliance.type.trim() === "") && updatedAppliance.brand) {
+          const suggestedType = suggestType(updatedAppliance.reference, updatedAppliance.brand);
+          if (suggestedType) {
+            updatedAppliance.type = suggestedType;
+          } else {
+            isComplete = false;
+          }
+        }
+      }
+
+      // Ajouter l'appareil dans la catégorie appropriée
+      if (foundInDatabase || isComplete) {
+        appliancesToImport.push(updatedAppliance);
+      } else {
+        appliancesToComplete.push(updatedAppliance);
       }
     });
 
     // S'il reste des appareils incomplets, montrer le formulaire pour les compléter
-    if (stillIncompleteAppliances.length > 0) {
-      setIncompleteAppliances(stillIncompleteAppliances);
+    if (appliancesToComplete.length > 0) {
+      setIncompleteAppliances(appliancesToComplete);
       toast({
         title: "Information",
-        description: `${stillIncompleteAppliances.length} appareils ont besoin de compléments d'informations.`,
+        description: `${appliancesToComplete.length} appareils ont besoin de compléments d'informations.`,
       });
+      
+      // Si on a des appareils complets, les traiter immédiatement
+      if (appliancesToImport.length > 0) {
+        handleDirectImport(appliancesToImport);
+      }
       return;
     }
 
+    // Tous les appareils sont complets, les importer
+    handleDirectImport(appliancesToImport);
+  };
+  
+  // Nouvelle fonction pour gérer l'importation directe
+  const handleDirectImport = (appliancesToImport: Appliance[]) => {
     // Ajouter les appareils complétés à la base de données
-    const importedCount = importAppliances(completedAppliances);
+    const importedCount = importAppliances(appliancesToImport);
 
     // Si une référence de pièce est fournie, associer les appareils à cette référence
     if (partReference.trim()) {
@@ -122,24 +144,30 @@ const Import: React.FC = () => {
       const importSession: ImportSession = {
         id: `session_${Date.now()}`,
         partReference,
-        appliances: completedAppliances,
+        appliances: appliancesToImport,
         createdAt: new Date().toISOString()
       };
       
       // Sauvegarder temporairement pour l'export actuel
       localStorage.setItem("lastImportSession", JSON.stringify(importSession));
 
-      // Associer tous les appareils importés à la référence de pièce
-      const applianceIds = completedAppliances.map(app => app.id);
+      // IMPORTANT: Pour corriger le problème d'association, on doit récupérer les IDs des appareils après importation
+      const applianceRefs = appliancesToImport.map(app => app.reference);
+      // Trouver les appareils correspondants dans la base de données (pour avoir les bons IDs)
+      const matchingAppliances = appliances.filter(app => applianceRefs.includes(app.reference));
+      // Extraire seulement les IDs pour l'association
+      const applianceIds = matchingAppliances.map(app => app.id);
+      
+      // Associer tous les appareils importés à la référence de pièce avec les IDs corrects
       associateApplicancesToPartReference(applianceIds, partReference);
       
       toast({
         title: "Importation réussie",
-        description: `${importedCount} nouveaux appareils ajoutés et associés à la référence ${partReference}.`
+        description: `${importedCount} nouveaux appareils ajoutés et ${matchingAppliances.length} appareils associés à la référence ${partReference}.`
       });
 
       // Proposer l'export via une boîte de dialogue
-      setImportedAppliances(completedAppliances);
+      setImportedAppliances(appliancesToImport);
       setShowExportDialog(true); // Afficher la boîte de dialogue d'abord
       setShowExportOption(true); // Puis conserver l'option en bas de page
     } else {
@@ -151,10 +179,10 @@ const Import: React.FC = () => {
       setShowExportOption(false);
     }
     
-    if (importedCount < completedAppliances.length) {
+    if (importedCount < appliancesToImport.length) {
       toast({
         title: "Information",
-        description: `${completedAppliances.length - importedCount} appareils étaient déjà dans la base de données.`
+        description: `${appliancesToImport.length - importedCount} appareils étaient déjà dans la base de données.`
       });
     }
   };
