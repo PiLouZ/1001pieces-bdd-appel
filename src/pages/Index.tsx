@@ -1,3 +1,4 @@
+
 import React from "react";
 import Navigation from "@/components/Navigation";
 import SearchBar from "@/components/SearchBar";
@@ -6,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/componen
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
-import { BarChart3, Database, FileText, Import, Export, Settings, Info, Plus, Wrench, FileExport } from "lucide-react";
+import { BarChart3, Database, FileText, Import, Settings, Info, Plus, Wrench } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 
@@ -122,7 +123,7 @@ const Index = () => {
           <Card className="bg-purple-50 hover:bg-purple-100 transition-colors cursor-pointer">
             <CardContent className="p-6 flex flex-col items-center justify-center">
               <Link to="/export" className="w-full h-full flex flex-col items-center">
-                <FileExport className="h-10 w-10 text-purple-600 mb-2" />
+                <FileText className="h-10 w-10 text-purple-600 mb-2" />
                 <h3 className="font-medium text-center">Exporter les données</h3>
                 <p className="text-sm text-gray-500 text-center">CSV, HTML</p>
               </Link>
