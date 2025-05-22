@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Navigation from "@/components/Navigation";
@@ -70,7 +69,7 @@ const Export: React.FC = () => {
         });
       } else {
         const jsonContent = exportAppliances(appliancesToExport, { 
-          format: "json", // This is now valid with our updated type
+          format: "json",
           partReference: exportType === "by-part-reference" ? selectedPartReference : undefined
         });
         

@@ -8,30 +8,34 @@ export function exportAppliances(appliances: Appliance[], options: ExportOptions
   const { format, includeHeader = true, partReference } = options;
   
   if (format === "csv") {
-    // Headers for the CSV
-    const headers = ["Référence technique", "Référence commerciale", "Marque", "Type", "Date d'ajout"];
-    if (partReference) {
-      headers.push("Référence de pièce");
-    }
+    // Headers for the CSV with the new format
+    const headers = [
+      "Référence de la pièce",
+      "Type de l'appareil",
+      "Marque de l'appareil",
+      "Modèle de l'appareil", // This will be a concatenation
+      "Référence technique de l'appareil",
+      "Référence commerciale de l'appareil"
+    ];
     
     // Start with headers if includeHeader is true
-    let csv = includeHeader ? headers.join(";") + "\n" : "";
+    let csv = includeHeader ? headers.join("\t") + "\n" : "";
     
     // Add each appliance as a row
     appliances.forEach(appliance => {
+      // Create the model field by concatenating reference and commercialRef
+      const model = `${appliance.reference}${appliance.commercialRef ? " - " + appliance.commercialRef : ""}`;
+      
       const row = [
+        partReference || "",
+        appliance.type || "",
+        appliance.brand || "",
+        model,
         appliance.reference,
-        appliance.commercialRef || "",
-        appliance.brand,
-        appliance.type,
-        appliance.dateAdded
+        appliance.commercialRef || ""
       ];
       
-      if (partReference) {
-        row.push(partReference);
-      }
-      
-      csv += row.join(";") + "\n";
+      csv += row.join("\t") + "\n";
     });
     
     return csv;
@@ -42,29 +46,27 @@ export function exportAppliances(appliances: Appliance[], options: ExportOptions
     // Add header row if includeHeader is true
     if (includeHeader) {
       html += '<thead><tr>';
-      html += '<th>Référence technique</th>';
-      html += '<th>Référence commerciale</th>';
-      html += '<th>Marque</th>';
-      html += '<th>Type</th>';
-      html += '<th>Date d\'ajout</th>';
-      if (partReference) {
-        html += '<th>Référence de pièce</th>';
-      }
+      html += '<th>Référence de la pièce</th>';
+      html += '<th>Type de l\'appareil</th>';
+      html += '<th>Marque de l\'appareil</th>';
+      html += '<th>Modèle de l\'appareil</th>';
+      html += '<th>Référence technique de l\'appareil</th>';
+      html += '<th>Référence commerciale de l\'appareil</th>';
       html += '</tr></thead>';
     }
     
     // Add data rows
     html += '<tbody>';
     appliances.forEach(appliance => {
+      const model = `${appliance.reference}${appliance.commercialRef ? " - " + appliance.commercialRef : ""}`;
+      
       html += '<tr>';
+      html += `<td>${partReference || ""}</td>`;
+      html += `<td>${appliance.type || ""}</td>`;
+      html += `<td>${appliance.brand || ""}</td>`;
+      html += `<td>${model}</td>`;
       html += `<td>${appliance.reference}</td>`;
       html += `<td>${appliance.commercialRef || ""}</td>`;
-      html += `<td>${appliance.brand}</td>`;
-      html += `<td>${appliance.type}</td>`;
-      html += `<td>${appliance.dateAdded}</td>`;
-      if (partReference) {
-        html += `<td>${partReference}</td>`;
-      }
       html += '</tr>';
     });
     html += '</tbody></table>';
