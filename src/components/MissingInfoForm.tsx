@@ -18,6 +18,7 @@ import {
   TableHeader, 
   TableRow 
 } from "@/components/ui/table";
+import { ProcessedRow } from "@/utils/importUtils";
 
 interface MissingInfoFormProps {
   appliances: Appliance[];
@@ -25,6 +26,13 @@ interface MissingInfoFormProps {
   knownTypes: string[];
   onComplete: (completedAppliances: Appliance[]) => void;
   onCancel: () => void;
+}
+
+interface MissingInfoRowProps {
+  row: ProcessedRow;
+  knownBrands: string[];
+  knownTypes: string[];
+  onSave: (updatedData: ProcessedRow) => void;
 }
 
 const MissingInfoForm: React.FC<MissingInfoFormProps> = ({
@@ -158,6 +166,86 @@ const MissingInfoForm: React.FC<MissingInfoFormProps> = ({
           disabled={isMissingInfo}
         >
           Compléter et importer
+        </Button>
+      </CardFooter>
+    </Card>
+  );
+};
+
+// Add the single row version for processing in Import.tsx
+export const MissingInfoRowForm: React.FC<MissingInfoRowProps> = ({
+  row,
+  knownBrands = [],
+  knownTypes = [],
+  onSave
+}) => {
+  const [editedData, setEditedData] = useState<ProcessedRow>(row);
+
+  const handleChange = (field: keyof ProcessedRow, value: string) => {
+    setEditedData({ ...editedData, [field]: value });
+  };
+
+  const handleSave = () => {
+    onSave(editedData);
+  };
+
+  const isMissingInfo = !editedData.brand || !editedData.type;
+
+  return (
+    <Card className="w-full">
+      <CardHeader>
+        <CardTitle>Compléter les informations pour: {editedData.reference}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Référence technique</label>
+              <Input value={editedData.reference} disabled />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Référence commerciale</label>
+              <Input 
+                value={editedData.commercialRef || ""} 
+                onChange={(e) => handleChange("commercialRef", e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Marque</label>
+              <Input
+                list="knownBrandsList"
+                value={editedData.brand || ""}
+                onChange={(e) => handleChange("brand", e.target.value)}
+                className={!editedData.brand ? "border-amber-500" : ""}
+              />
+              <datalist id="knownBrandsList">
+                {knownBrands.map((brand, i) => (
+                  <option key={i} value={brand} />
+                ))}
+              </datalist>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Type</label>
+              <Input
+                list="knownTypesList"
+                value={editedData.type || ""}
+                onChange={(e) => handleChange("type", e.target.value)}
+                className={!editedData.type ? "border-amber-500" : ""}
+              />
+              <datalist id="knownTypesList">
+                {knownTypes.map((type, i) => (
+                  <option key={i} value={type} />
+                ))}
+              </datalist>
+            </div>
+          </div>
+        </div>
+      </CardContent>
+      <CardFooter className="flex justify-end">
+        <Button onClick={handleSave} disabled={isMissingInfo}>
+          Enregistrer
         </Button>
       </CardFooter>
     </Card>

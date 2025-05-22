@@ -14,10 +14,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import ImportForm from "@/components/ImportForm";
-import MissingInfoForm from "@/components/MissingInfoForm";
+import MissingInfoForm, { MissingInfoRowForm } from "@/components/MissingInfoForm";
 import { useDropzone } from "react-dropzone";
 import { useAppliances } from "@/hooks/useAppliances";
 import { Appliance } from "@/types/appliance";
+
+interface ImportSession {
+  id: string;
+  createdAt: string;
+  appliances: Appliance[];
+}
 
 const Import: React.FC = () => {
   const { 
@@ -71,8 +77,7 @@ const Import: React.FC = () => {
         // Vérifier si le fichier contient des données
         if (processedRows.length === 0) {
           toast("Erreur", {
-            description: "Le fichier ne contient aucune donnée valide",
-            variant: "destructive"
+            description: "Le fichier ne contient aucune donnée valide"
           });
           return;
         }
@@ -113,7 +118,7 @@ const Import: React.FC = () => {
         
         // Vérifier s'il y a des données incomplètes
         const incompleteRows = updatedRows.filter(
-          row => !identified[updatedRows.indexOf(row)] && (
+          (row, idx) => !identified[idx] && (
             !row.brand || row.brand.trim() === "" || 
             !row.type || row.type.trim() === ""
           )
@@ -142,8 +147,7 @@ const Import: React.FC = () => {
       } catch (error) {
         console.error("Error parsing file:", error);
         toast("Erreur", {
-          description: "Impossible de lire le fichier. Vérifiez le format.",
-          variant: "destructive"
+          description: "Impossible de lire le fichier. Vérifiez le format."
         });
       }
     };
@@ -162,12 +166,31 @@ const Import: React.FC = () => {
     multiple: false
   });
 
+  const handleImportAppliances = (appliancesToImport: Appliance[]) => {
+    // Filtrer les doublons
+    const existingRefs = new Set(allAppliances.map(app => app.reference));
+    const newAppliances = appliancesToImport.filter(app => !existingRefs.has(app.reference));
+    const duplicates = appliancesToImport.length - newAppliances.length;
+    
+    // Importer les appareils
+    const importedCount = importAppliances(newAppliances);
+    
+    setImportedCount(importedCount);
+    setDuplicateCount(duplicates);
+    
+    // Si une référence de pièce est spécifiée, l'associer aux appareils importés
+    if (partReference.trim()) {
+      // La logique d'association serait ici
+    }
+    
+    return { importedCount, duplicates };
+  };
+
   const handleImport = () => {
     try {
       if (processedData.length === 0) {
         toast("Erreur", {
-          description: "Aucune donnée à importer",
-          variant: "destructive"
+          description: "Aucune donnée à importer"
         });
         return;
       }
@@ -182,28 +205,7 @@ const Import: React.FC = () => {
         dateAdded: new Date().toISOString()
       }));
       
-      // Filtrer les doublons déjà présents dans la base
-      const existingRefs = new Set(allAppliances.map(app => app.reference));
-      const newAppliances = appliancesToImport.filter(app => !existingRefs.has(app.reference));
-      const duplicates = appliancesToImport.length - newAppliances.length;
-      
-      // Importer les appareils
-      const importedCount = importAppliances(newAppliances);
-      
-      setImportedCount(importedCount);
-      setDuplicateCount(duplicates);
-      
-      // Si une référence de pièce est spécifiée, l'associer aux appareils importés
-      if (partReference.trim()) {
-        // Récupérer les IDs des nouveaux appareils (ils sont générés lors de l'importation)
-        const importedRefs = newAppliances.map(app => app.reference);
-        const importedApplianceIds = allAppliances
-          .filter(app => importedRefs.includes(app.reference))
-          .map(app => app.id);
-        
-        // Associer la référence de pièce
-        // associateApplicancesToPartReference(importedApplianceIds, partReference);
-      }
+      const { importedCount, duplicates } = handleImportAppliances(appliancesToImport);
       
       toast("Importation réussie", {
         description: `${importedCount} appareils importés (${duplicates} doublons ignorés)`
@@ -219,8 +221,7 @@ const Import: React.FC = () => {
     } catch (error) {
       console.error("Import error:", error);
       toast("Erreur d'importation", {
-        description: "Une erreur est survenue lors de l'importation",
-        variant: "destructive"
+        description: "Une erreur est survenue lors de l'importation"
       });
     }
   };
@@ -272,27 +273,20 @@ const Import: React.FC = () => {
     try {
       if (processedData.length === 0) return;
       
-      // Filtrer les doublons
-      const existingRefs = new Set(allAppliances.map(app => app.reference));
-      const appliancesToImport = processedData
-        .filter(row => !existingRefs.has(row.reference))
-        .map(row => ({
-          reference: row.reference,
-          commercialRef: row.commercialRef,
-          brand: row.brand,
-          type: row.type
-        }));
+      // Préparer les appareils à importer
+      const appliancesToImport: Appliance[] = processedData.map(row => ({
+        id: "",  // L'ID sera généré par la fonction importAppliances
+        reference: row.reference,
+        commercialRef: row.commercialRef,
+        brand: row.brand,
+        type: row.type,
+        dateAdded: new Date().toISOString()
+      }));
       
-      const duplicates = processedData.length - appliancesToImport.length;
-      
-      // Importer les appareils
-      const importCount = importAppliances(appliancesToImport as Appliance[]);
-      
-      setImportedCount(importCount);
-      setDuplicateCount(duplicates);
+      const { importedCount, duplicates } = handleImportAppliances(appliancesToImport);
       
       toast("Importation réussie", {
-        description: `${importCount} appareils importés (${duplicates} doublons ignorés)`
+        description: `${importedCount} appareils importés (${duplicates} doublons ignorés)`
       });
       
       // Nettoyer la session d'importation
@@ -304,8 +298,25 @@ const Import: React.FC = () => {
     } catch (error) {
       console.error("Import error:", error);
       toast("Erreur", {
-        description: "Une erreur est survenue lors de l'importation",
-        variant: "destructive"
+        description: "Une erreur est survenue lors de l'importation"
+      });
+    }
+  };
+  
+  const handleImportFromForm = (appliances: Appliance[]) => {
+    try {
+      const { importedCount, duplicates } = handleImportAppliances(appliances);
+      
+      toast("Importation réussie", {
+        description: `${importedCount} appareils importés (${duplicates} doublons ignorés)`
+      });
+      
+      // Nettoyer tout état en cours
+      resetImport();
+    } catch (error) {
+      console.error("Import form error:", error);
+      toast("Erreur", {
+        description: "Une erreur est survenue lors de l'importation"
       });
     }
   };
@@ -422,7 +433,11 @@ const Import: React.FC = () => {
                       </p>
                     </div>
                     
-                    <ImportForm />
+                    <ImportForm 
+                      onImport={handleImportFromForm}
+                      knownBrands={Array.from(new Set(allAppliances.map(app => app.brand)))}
+                      knownTypes={Array.from(new Set(allAppliances.map(app => app.type)))}
+                    />
                   </div>
                 </CardContent>
               </Card>
@@ -442,13 +457,11 @@ const Import: React.FC = () => {
                   <Progress value={(processedCount / incompleteTotalCount) * 100} />
                   
                   {processedData[currentIncompleteIndex] && (
-                    <MissingInfoForm
+                    <MissingInfoRowForm
                       row={processedData[currentIncompleteIndex]}
-                      knownBrands={[]}
-                      knownTypes={[]}
+                      knownBrands={Array.from(new Set(allAppliances.map(app => app.brand)))}
+                      knownTypes={Array.from(new Set(allAppliances.map(app => app.type)))}
                       onSave={handleMissingInfoUpdate}
-                      // suggestBrand={suggestBrand}
-                      // suggestType={suggestType}
                     />
                   )}
                   

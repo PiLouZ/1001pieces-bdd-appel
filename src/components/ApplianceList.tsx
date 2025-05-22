@@ -1,403 +1,439 @@
 
+// Import statements and types
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { Appliance, ApplianceEditable, ApplianceSelection } from "@/types/appliance";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
-import { Edit, Trash, AlertCircle, FileText, Check, MoreVertical, FileCheck2 } from "lucide-react";
-import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { useAppliances } from "@/hooks/useAppliances";
-import ApplianceEditDialog from "./ApplianceEditDialog";
+import { Appliance, ApplianceSelection } from "@/types/appliance";
+import { toast } from "sonner";
+import { Edit, Trash2, Check, X, Filter, ChevronDown, ChevronUp } from "lucide-react";
+import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuItem, 
+  DropdownMenuTrigger 
+} from "@/components/ui/dropdown-menu";
 
-interface ApplianceListProps {
+export interface ApplianceListProps {
   appliances: Appliance[];
-  onDelete?: (id: string) => void;
-  onEdit?: (appliance: Appliance) => void;
-  onSelect?: (id: string, selected: boolean) => void;
-  selected?: ApplianceSelection;
-  onSelectAll?: (selected: boolean) => void;
-  onBulkUpdate?: (field: keyof Omit<Partial<Appliance>, "id">, value: string) => void;
-  getPartReferencesForAppliance?: (id: string) => string[];
+  onDelete: (id: string) => void;
+  onEdit: (updatedAppliance: Appliance) => void;
+  onSelect: (id: string, selected: boolean) => void;
+  selected: ApplianceSelection;
+  onSelectAll: (selected: boolean) => void;
+  onBulkUpdate: (field: "source" | "brand" | "type" | "dateAdded" | "reference" | "commercialRef" | "lastUpdated", value: string) => void;
+  onBulkDelete: () => void;
+  onDuplicatesCheck: () => void;
+  onShowDuplicates: () => void;
+  duplicatesCount: number;
+  knownBrands: string[];
+  knownTypes: string[];
 }
 
-const ApplianceList: React.FC<ApplianceListProps> = ({
-  appliances,
-  onDelete,
-  onEdit,
+const ApplianceList: React.FC<ApplianceListProps> = ({ 
+  appliances, 
+  onDelete, 
+  onEdit, 
   onSelect,
-  selected = {},
+  selected,
   onSelectAll,
   onBulkUpdate,
-  getPartReferencesForAppliance
+  onBulkDelete,
+  onDuplicatesCheck,
+  onShowDuplicates,
+  duplicatesCount,
+  knownBrands,
+  knownTypes
 }) => {
-  const [selectedAppliances, setSelectedAppliances] = useState<ApplianceSelection>({});
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [currentAppliance, setCurrentAppliance] = useState<Appliance | null>(null);
-  const [showPartRefDialog, setShowPartRefDialog] = useState(false);
-  const [showDeleteConfirmDialog, setShowDeleteConfirmDialog] = useState(false);
-  const [partReference, setPartReference] = useState("");
-  const [duplicatesCount, setDuplicatesCount] = useState(0);
-  const navigate = useNavigate();
-  const { 
-    associateApplicancesToPartReference, 
-    getPartReferencesForAppliance: getPartRefs,
-    cleanDatabase,
-    appliances: allAppliances
-  } = useAppliances();
-
-  // Identifier les doublons
+  const [sortField, setSortField] = useState<keyof Appliance>("reference");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+  const [isEditing, setIsEditing] = useState<{[key: string]: boolean}>({});
+  const [editValues, setEditValues] = useState<{[key: string]: string}>({});
+  
+  // Effet pour créer un ID unique pour chaque appareil s'il n'en a pas déjà un
   useEffect(() => {
-    // Utiliser un Set pour identifier les références uniques
-    const references = new Set<string>();
-    const duplicates = new Set<string>();
-    
-    allAppliances.forEach(appliance => {
-      if (references.has(appliance.reference)) {
-        duplicates.add(appliance.reference);
-      } else {
-        references.add(appliance.reference);
+    appliances.forEach(app => {
+      if (!app.id) {
+        app.id = `app-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
       }
     });
-    
-    setDuplicatesCount(duplicates.size);
-  }, [allAppliances]);
-
-  // Gérer les références de pièces pour chaque appareil
-  const [partRefCounts, setPartRefCounts] = useState<Record<string, number>>({});
-
-  useEffect(() => {
-    const refCounts: Record<string, number> = {};
-    
-    // Compter les références pour chaque appareil
-    appliances.forEach(appliance => {
-      const partRefs = getPartReferencesForAppliance 
-        ? getPartReferencesForAppliance(appliance.id) 
-        : getPartRefs(appliance.id);
-      refCounts[appliance.id] = partRefs.length;
-    });
-    
-    setPartRefCounts(refCounts);
-  }, [appliances, getPartReferencesForAppliance, getPartRefs]);
-
-  const getAppliancePartRefCount = (id: string) => {
-    return partRefCounts[id] || 0;
-  };
-
-  const toggleApplianceSelection = (id: string) => {
-    if (onSelect) {
-      onSelect(id, !selected[id]);
+  }, [appliances]);
+  
+  // Gestion de tri
+  const handleSort = (field: keyof Appliance) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
     } else {
-      setSelectedAppliances(prev => ({
-        ...prev,
-        [id]: !prev[id]
-      }));
+      setSortField(field);
+      setSortDirection("asc");
     }
   };
-
-  const toggleAllApplianceSelection = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (onSelectAll) {
-      onSelectAll(e.target.checked);
+  
+  // Tri des appareils
+  const sortedAppliances = [...appliances].sort((a, b) => {
+    const aValue = String(a[sortField] || "");
+    const bValue = String(b[sortField] || "");
+    
+    if (sortDirection === "asc") {
+      return aValue.localeCompare(bValue);
     } else {
-      const newState: ApplianceSelection = {};
-      if (e.target.checked) {
-        appliances.forEach(appliance => {
-          newState[appliance.id] = true;
+      return bValue.localeCompare(aValue);
+    }
+  });
+  
+  // Gestion des suppressions
+  const handleDelete = (id: string) => {
+    onDelete(id);
+    toast("Appareil supprimé", {
+      description: "L'appareil a été supprimé avec succès"
+    });
+  };
+  
+  // Edition inline
+  const startEditing = (id: string, field: string, value: string) => {
+    setIsEditing(prev => ({ ...prev, [`${id}-${field}`]: true }));
+    setEditValues(prev => ({ ...prev, [`${id}-${field}`]: value }));
+  };
+  
+  const cancelEditing = (id: string, field: string) => {
+    setIsEditing(prev => ({ ...prev, [`${id}-${field}`]: false }));
+    setEditValues(prev => {
+      const newValues = { ...prev };
+      delete newValues[`${id}-${field}`];
+      return newValues;
+    });
+  };
+  
+  const saveEditing = (id: string, field: string, originalAppliance: Appliance) => {
+    const newValue = editValues[`${id}-${field}`];
+    if (typeof newValue !== 'undefined') {
+      // Vérifier si la valeur a changé
+      if (String(originalAppliance[field as keyof Appliance]) !== newValue) {
+        // Créer un appareil mis à jour avec la nouvelle valeur
+        const updatedAppliance = { ...originalAppliance, [field]: newValue };
+        onEdit(updatedAppliance);
+        toast("Appareil mis à jour", {
+          description: `Le champ ${field} a été mis à jour avec succès`
         });
       }
-      setSelectedAppliances(newState);
+      // Réinitialiser l'état d'édition
+      cancelEditing(id, field);
     }
-  };
-
-  const countSelectedAppliances = () => {
-    const selectionToUse = onSelect ? selected : selectedAppliances;
-    return Object.values(selectionToUse).filter(Boolean).length;
-  };
-
-  const handleEditAppliance = (appliance: Appliance) => {
-    setCurrentAppliance(appliance);
-    setIsEditDialogOpen(true);
-  };
-
-  const handleDeleteAppliance = (id: string) => {
-    if (onDelete) {
-      onDelete(id);
-      toast("Appareil supprimé", {
-        description: "L'appareil a été supprimé avec succès"
-      });
-    }
-  };
-
-  const handleAssociateWithPartRef = () => {
-    if (!partReference.trim()) {
-      toast("Erreur", {
-        description: "Veuillez spécifier une référence de pièce",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    const selectionToUse = onSelect ? selected : selectedAppliances;
-    const selectedIds = Object.keys(selectionToUse).filter(id => selectionToUse[id]);
-    
-    if (selectedIds.length === 0) {
-      toast("Erreur", {
-        description: "Veuillez sélectionner au moins un appareil",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    associateApplicancesToPartReference(selectedIds, partReference);
-    
-    // Mettre à jour le nombre de références de pièces pour chaque appareil
-    const updatedRefCounts: Record<string, number> = { ...partRefCounts };
-    selectedIds.forEach(id => {
-      updatedRefCounts[id] = (updatedRefCounts[id] || 0) + 1;
-    });
-    setPartRefCounts(updatedRefCounts);
-
-    toast("Association réussie", {
-      description: `${selectedIds.length} appareils ont été associés à la référence ${partReference}`
-    });
-
-    setShowPartRefDialog(false);
-    setPartReference("");
-  };
-
-  const handleDeleteSelected = () => {
-    const selectionToUse = onSelect ? selected : selectedAppliances;
-    const selectedIds = Object.keys(selectionToUse).filter(id => selectionToUse[id]);
-    
-    if (selectedIds.length === 0) {
-      toast("Information", {
-        description: "Aucun appareil sélectionné"
-      });
-      return;
-    }
-    
-    setShowDeleteConfirmDialog(true);
   };
   
-  const confirmDeleteSelected = () => {
-    const selectionToUse = onSelect ? selected : selectedAppliances;
-    const selectedIds = Object.keys(selectionToUse).filter(id => selectionToUse[id]);
-    
-    if (selectedIds.length === 0) {
-      return;
-    }
-    
-    let count = 0;
-    selectedIds.forEach(id => {
-      if (onDelete) {
-        onDelete(id);
-        count++;
-      }
-    });
-    
-    toast("Suppression terminée", {
-      description: `${count} appareils ont été supprimés avec succès`
-    });
-    
-    if (onSelect && onSelectAll) {
-      onSelectAll(false);
-    } else {
-      setSelectedAppliances({});
-    }
-    
-    setShowDeleteConfirmDialog(false);
+  const handleInputChange = (id: string, field: string, value: string) => {
+    setEditValues(prev => ({ ...prev, [`${id}-${field}`]: value }));
   };
   
-  const handleCleanDuplicates = () => {
-    const removedCount = cleanDatabase();
-    
-    if (removedCount > 0) {
-      toast("Nettoyage terminé", {
-        description: `${removedCount} doublons ont été supprimés.`
-      });
-      // Mettre à jour le compteur
-      setDuplicatesCount(0);
-    } else {
-      toast("Information", {
-        description: "Aucun doublon trouvé dans la base de données."
-      });
-    }
+  // Gestion des sélections
+  const isAllSelected = appliances.length > 0 && Object.keys(selected).length === appliances.length && 
+    Object.values(selected).every(Boolean);
+  
+  const isSomeSelected = Object.values(selected).some(Boolean) && !isAllSelected;
+  
+  const handleSelectAll = (checked: boolean) => {
+    onSelectAll(checked);
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">
-            {countSelectedAppliances()} sélectionnés sur {appliances.length} appareils
-          </span>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {duplicatesCount > 0 && (
-            <Button variant="outline" className="flex items-center gap-1" onClick={handleCleanDuplicates}>
-              <FileCheck2 className="h-4 w-4" />
-              Supprimer les doublons ({duplicatesCount})
-            </Button>
+    <div className="rounded-md border">
+      <div className="flex items-center p-4 border-b">
+        <Checkbox
+          checked={isAllSelected}
+          onCheckedChange={handleSelectAll}
+          indeterminate={isSomeSelected}
+          aria-label="Sélectionner tous les appareils"
+        />
+        <div className="ml-auto flex gap-2">
+          {Object.values(selected).some(Boolean) && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="h-8">
+                  Actions groupées <ChevronDown className="ml-1 h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={onBulkDelete}>
+                  <Trash2 className="mr-2 h-4 w-4" /> Supprimer la sélection
+                </DropdownMenuItem>
+                {/* Autres actions groupées */}
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
           
-          {countSelectedAppliances() > 0 && (
-            <>
-              <Button variant="outline" onClick={() => setShowPartRefDialog(true)}>
-                <FileText className="h-4 w-4 mr-2" />
-                Associer à une référence de pièce
-              </Button>
-              
-              <Button variant="destructive" onClick={handleDeleteSelected}>
-                <Trash className="h-4 w-4 mr-2" />
-                Supprimer {countSelectedAppliances()} élément(s)
-              </Button>
-            </>
-          )}
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="h-8"
+            onClick={onDuplicatesCheck}
+          >
+            <Filter className="mr-2 h-4 w-4" /> Vérifier les incohérences
+          </Button>
+          
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="h-8"
+            onClick={onShowDuplicates}
+          >
+            Doublons {duplicatesCount > 0 && <span className="ml-1 rounded-full bg-red-500 px-2 py-1 text-xs text-white">{duplicatesCount}</span>}
+          </Button>
         </div>
       </div>
 
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-12"></TableHead>
+            <TableHead 
+              className="cursor-pointer"
+              onClick={() => handleSort("reference")}
+            >
+              Référence
+              {sortField === "reference" && (
+                sortDirection === "asc" ? 
+                <ChevronUp className="inline-block ml-1 h-4 w-4" /> : 
+                <ChevronDown className="inline-block ml-1 h-4 w-4" />
+              )}
+            </TableHead>
+            <TableHead 
+              className="cursor-pointer"
+              onClick={() => handleSort("commercialRef")}
+            >
+              Référence commerciale
+              {sortField === "commercialRef" && (
+                sortDirection === "asc" ? 
+                <ChevronUp className="inline-block ml-1 h-4 w-4" /> : 
+                <ChevronDown className="inline-block ml-1 h-4 w-4" />
+              )}
+            </TableHead>
+            <TableHead 
+              className="cursor-pointer"
+              onClick={() => handleSort("brand")}
+            >
+              Marque
+              {sortField === "brand" && (
+                sortDirection === "asc" ? 
+                <ChevronUp className="inline-block ml-1 h-4 w-4" /> : 
+                <ChevronDown className="inline-block ml-1 h-4 w-4" />
+              )}
+            </TableHead>
+            <TableHead 
+              className="cursor-pointer"
+              onClick={() => handleSort("type")}
+            >
+              Type
+              {sortField === "type" && (
+                sortDirection === "asc" ? 
+                <ChevronUp className="inline-block ml-1 h-4 w-4" /> : 
+                <ChevronDown className="inline-block ml-1 h-4 w-4" />
+              )}
+            </TableHead>
+            <TableHead>Date d'ajout</TableHead>
+            <TableHead>Pièces compatibles</TableHead>
+            <TableHead className="w-[100px] text-right">Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {sortedAppliances.length === 0 ? (
             <TableRow>
-              <TableHead className="w-12">
-                <Checkbox
-                  onCheckedChange={toggleAllApplianceSelection}
-                  checked={countSelectedAppliances() === appliances.length && appliances.length > 0}
-                  aria-label={countSelectedAppliances() > 0 && countSelectedAppliances() < appliances.length ? "Partiellement sélectionné" : "Sélectionner tous les appareils"}
-                />
-              </TableHead>
-              <TableHead>Référence</TableHead>
-              <TableHead>Référence commerciale</TableHead>
-              <TableHead>Marque</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead>Pièces compatibles</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
+              <TableCell colSpan={8} className="text-center">
+                Aucun appareil trouvé
+              </TableCell>
             </TableRow>
-          </TableHeader>
-          <TableBody>
-            {appliances.length > 0 ? (
-              appliances.map((appliance) => (
-                <TableRow key={appliance.id}>
-                  <TableCell>
-                    <Checkbox
-                      checked={onSelect ? !!selected[appliance.id] : !!selectedAppliances[appliance.id]}
-                      onCheckedChange={() => toggleApplianceSelection(appliance.id)}
-                    />
-                  </TableCell>
-                  <TableCell>{appliance.reference}</TableCell>
-                  <TableCell>{appliance.commercialRef || "-"}</TableCell>
-                  <TableCell>{appliance.brand || "-"}</TableCell>
-                  <TableCell>{appliance.type || "-"}</TableCell>
-                  <TableCell>{getAppliancePartRefCount(appliance.id)}</TableCell>
-                  <TableCell className="text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm">
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                        <DropdownMenuItem onClick={() => handleEditAppliance(appliance)}>
-                          <Edit className="h-4 w-4 mr-2" />
-                          Modifier
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={() => handleDeleteAppliance(appliance.id)}>
-                          <Trash className="h-4 w-4 mr-2" />
-                          Supprimer
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell colSpan={7} className="h-24 text-center">
-                  Aucun appareil trouvé.
+          ) : (
+            sortedAppliances.map((appliance) => (
+              <TableRow key={appliance.id}>
+                <TableCell>
+                  <Checkbox 
+                    checked={!!selected[appliance.id]} 
+                    onCheckedChange={(checked) => onSelect(appliance.id, checked === true)}
+                    aria-label="Sélectionner cet appareil"
+                  />
+                </TableCell>
+                <TableCell className="font-medium">
+                  {isEditing[`${appliance.id}-reference`] ? (
+                    <div className="flex items-center space-x-1">
+                      <Input
+                        className="h-8"
+                        value={editValues[`${appliance.id}-reference`]}
+                        onChange={(e) => handleInputChange(appliance.id, "reference", e.target.value)}
+                      />
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => saveEditing(appliance.id, "reference", appliance)}
+                        className="h-8 w-8"
+                      >
+                        <Check className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => cancelEditing(appliance.id, "reference")}
+                        className="h-8 w-8"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <span
+                      className="cursor-pointer hover:underline"
+                      onClick={() => startEditing(appliance.id, "reference", appliance.reference)}
+                    >
+                      {appliance.reference}
+                    </span>
+                  )}
+                </TableCell>
+                <TableCell>
+                  {/* Commercial ref logic - similar to reference */}
+                  {isEditing[`${appliance.id}-commercialRef`] ? (
+                    <div className="flex items-center space-x-1">
+                      <Input
+                        className="h-8"
+                        value={editValues[`${appliance.id}-commercialRef`]}
+                        onChange={(e) => handleInputChange(appliance.id, "commercialRef", e.target.value)}
+                      />
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => saveEditing(appliance.id, "commercialRef", appliance)}
+                        className="h-8 w-8"
+                      >
+                        <Check className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => cancelEditing(appliance.id, "commercialRef")}
+                        className="h-8 w-8"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <span
+                      className="cursor-pointer hover:underline"
+                      onClick={() => startEditing(appliance.id, "commercialRef", appliance.commercialRef || "")}
+                    >
+                      {appliance.commercialRef || "-"}
+                    </span>
+                  )}
+                </TableCell>
+                <TableCell>
+                  {/* Brand logic - similar to reference */}
+                  {isEditing[`${appliance.id}-brand`] ? (
+                    <div className="flex items-center space-x-1">
+                      <Input
+                        className="h-8"
+                        list={`brands-${appliance.id}`}
+                        value={editValues[`${appliance.id}-brand`]}
+                        onChange={(e) => handleInputChange(appliance.id, "brand", e.target.value)}
+                      />
+                      <datalist id={`brands-${appliance.id}`}>
+                        {knownBrands.map((brand, i) => (
+                          <option key={i} value={brand} />
+                        ))}
+                      </datalist>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => saveEditing(appliance.id, "brand", appliance)}
+                        className="h-8 w-8"
+                      >
+                        <Check className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => cancelEditing(appliance.id, "brand")}
+                        className="h-8 w-8"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <span
+                      className="cursor-pointer hover:underline"
+                      onClick={() => startEditing(appliance.id, "brand", appliance.brand)}
+                    >
+                      {appliance.brand}
+                    </span>
+                  )}
+                </TableCell>
+                <TableCell>
+                  {/* Type logic - similar to reference */}
+                  {isEditing[`${appliance.id}-type`] ? (
+                    <div className="flex items-center space-x-1">
+                      <Input
+                        className="h-8"
+                        list={`types-${appliance.id}`}
+                        value={editValues[`${appliance.id}-type`]}
+                        onChange={(e) => handleInputChange(appliance.id, "type", e.target.value)}
+                      />
+                      <datalist id={`types-${appliance.id}`}>
+                        {knownTypes.map((type, i) => (
+                          <option key={i} value={type} />
+                        ))}
+                      </datalist>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => saveEditing(appliance.id, "type", appliance)}
+                        className="h-8 w-8"
+                      >
+                        <Check className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => cancelEditing(appliance.id, "type")}
+                        className="h-8 w-8"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <span
+                      className="cursor-pointer hover:underline"
+                      onClick={() => startEditing(appliance.id, "type", appliance.type)}
+                    >
+                      {appliance.type}
+                    </span>
+                  )}
+                </TableCell>
+                <TableCell>
+                  {appliance.dateAdded ? new Date(appliance.dateAdded).toLocaleDateString() : "-"}
+                </TableCell>
+                <TableCell>
+                  {appliance.partReferences ? appliance.partReferences.length : 0}
+                </TableCell>
+                <TableCell className="text-right">
+                  <div className="flex justify-end">
+                    <Button
+                      onClick={() => onEdit(appliance)}
+                      variant="ghost"
+                      size="icon"
+                    >
+                      <Edit className="h-4 w-4" />
+                      <span className="sr-only">Modifier</span>
+                    </Button>
+                    <Button
+                      onClick={() => handleDelete(appliance.id)}
+                      variant="ghost"
+                      size="icon"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      <span className="sr-only">Supprimer</span>
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
-
-      {isEditDialogOpen && currentAppliance && (
-        <ApplianceEditDialog
-          isOpen={isEditDialogOpen}
-          onClose={() => setIsEditDialogOpen(false)}
-          appliance={currentAppliance}
-          onSave={(updatedAppliance) => {
-            setIsEditDialogOpen(false);
-            if (onEdit) {
-              onEdit(updatedAppliance);
-            }
-          }}
-          knownBrands={[]}
-          knownTypes={[]}
-        />
-      )}
-
-      <Dialog open={showPartRefDialog} onOpenChange={setShowPartRefDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Associer à une référence de pièce</DialogTitle>
-            <DialogDescription>
-              Entrez la référence de la pièce compatible avec les appareils sélectionnés.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div>
-              <Label htmlFor="partReference">Référence de la pièce</Label>
-              <Input
-                id="partReference"
-                value={partReference}
-                onChange={(e) => setPartReference(e.target.value)}
-                className="mt-2"
-                placeholder="Ex: XYZ123"
-              />
-            </div>
-            <p className="text-sm text-muted-foreground">
-              {countSelectedAppliances()} appareils seront associés à cette référence de pièce
-            </p>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowPartRefDialog(false)}>Annuler</Button>
-            <Button onClick={handleAssociateWithPartRef}>Associer</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      
-      <Dialog open={showDeleteConfirmDialog} onOpenChange={setShowDeleteConfirmDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Confirmer la suppression</DialogTitle>
-            <DialogDescription>
-              Êtes-vous sûr de vouloir supprimer {countSelectedAppliances()} appareils ? Cette action est irréversible.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDeleteConfirmDialog(false)}>Annuler</Button>
-            <Button variant="destructive" onClick={confirmDeleteSelected}>
-              <Trash className="h-4 w-4 mr-2" />
-              Confirmer la suppression
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            ))
+          )}
+        </TableBody>
+      </Table>
     </div>
   );
 };

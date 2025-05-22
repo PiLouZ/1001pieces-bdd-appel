@@ -1,4 +1,3 @@
-
 import { Appliance, ImportResult } from "@/types/appliance";
 
 /**
@@ -217,4 +216,141 @@ export async function parsePdfData(file: File): Promise<ImportResult> {
     appliances: [],
     errors: ["Fonctionnalité d'importation PDF non implémentée"]
   };
+}
+
+/**
+ * Parse le contenu d'un fichier importé (CSV, Excel, etc.) et extrait les données des appareils
+ */
+export async function parseImportedFile(content: string): Promise<{ processedRows: ProcessedRow[] }> {
+  try {
+    const lines = content
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line.length > 0);
+    
+    if (lines.length === 0) {
+      return { processedRows: [] };
+    }
+
+    // Déterminer le séparateur et le format des données
+    const separators = ["\t", ";", ",", /\s{2,}/] as const;
+    let bestSeparator: string | RegExp = "\t"; // Par défaut
+    let maxColumns = 0;
+    let maxValidRows = 0;
+
+    // Tester chaque séparateur pour trouver celui qui donne le résultat le plus cohérent
+    for (const sep of separators) {
+      const firstLine = typeof sep === 'string' 
+        ? lines[0].split(sep) 
+        : lines[0].split(sep);
+      
+      if (firstLine.length >= 2) {
+        let validRows = 0;
+        for (let i = 1; i < Math.min(lines.length, 10); i++) {
+          const testLine = typeof sep === 'string' 
+            ? lines[i].split(sep) 
+            : lines[i].split(sep);
+          
+          if (testLine.length === firstLine.length) {
+            validRows++;
+          }
+        }
+        
+        if (validRows > maxValidRows || (validRows === maxValidRows && firstLine.length > maxColumns)) {
+          bestSeparator = sep;
+          maxColumns = firstLine.length;
+          maxValidRows = validRows;
+        }
+      }
+    }
+    
+    if (maxColumns < 2) {
+      return { processedRows: [] };
+    }
+    
+    // Déterminer les indices des colonnes
+    let startIndex = 0;
+    let typeIndex = -1;
+    let brandIndex = -1;
+    let referenceIndex = -1;
+    let commercialRefIndex = -1;
+    
+    // Chercher un en-tête
+    const headerLine = lines[0].toLowerCase();
+    if (
+      headerLine.includes("ref") || 
+      headerLine.includes("référence") || 
+      headerLine.includes("marque") || 
+      headerLine.includes("type")
+    ) {
+      const headers = typeof bestSeparator === 'string' 
+        ? headerLine.split(bestSeparator)
+        : headerLine.split(bestSeparator);
+      
+      for (let i = 0; i < headers.length; i++) {
+        const header = headers[i].trim().toLowerCase();
+        if (header.includes("type")) {
+          typeIndex = i;
+        } else if (header.includes("marque") || header.includes("brand")) {
+          brandIndex = i;
+        } else if (header.includes("ref") && header.includes("tech")) {
+          referenceIndex = i;
+        } else if (header.includes("ref") && (header.includes("com") || header.includes("modèle"))) {
+          commercialRefIndex = i;
+        } else if (header.includes("ref") || header.includes("référence")) {
+          if (referenceIndex === -1) {
+            referenceIndex = i;
+          }
+        }
+      }
+      
+      startIndex = 1;
+    }
+    
+    // Si on n'a pas détecté les colonnes, utiliser un format par défaut
+    if (maxColumns === 2) {
+      if (referenceIndex === -1) referenceIndex = 0;
+      if (commercialRefIndex === -1) commercialRefIndex = 1;
+    } else if (maxColumns >= 4) {
+      if (typeIndex === -1) typeIndex = 0;
+      if (brandIndex === -1) brandIndex = 1;
+      if (referenceIndex === -1) referenceIndex = 2;
+      if (commercialRefIndex === -1) commercialRefIndex = 3;
+    } else if (maxColumns === 3) {
+      if (brandIndex === -1) brandIndex = 0;
+      if (referenceIndex === -1) referenceIndex = 1;
+      if (commercialRefIndex === -1) commercialRefIndex = 2;
+    }
+    
+    // Extraire les données
+    const processedRows: ProcessedRow[] = [];
+    
+    for (let i = startIndex; i < lines.length; i++) {
+      if (!lines[i].trim()) continue;
+      
+      const parts = typeof bestSeparator === 'string' 
+        ? lines[i].split(bestSeparator) 
+        : lines[i].split(bestSeparator);
+      
+      // S'assurer qu'on a une référence technique
+      if (referenceIndex >= 0 && referenceIndex < parts.length && parts[referenceIndex].trim()) {
+        const row: ProcessedRow = {
+          reference: parts[referenceIndex].trim(),
+          commercialRef: commercialRefIndex >= 0 && commercialRefIndex < parts.length ? 
+            parts[commercialRefIndex].trim() : "",
+          brand: brandIndex >= 0 && brandIndex < parts.length ? 
+            parts[brandIndex].trim() : "",
+          type: typeIndex >= 0 && typeIndex < parts.length ? 
+            parts[typeIndex].trim() : ""
+        };
+        
+        processedRows.push(row);
+      }
+    }
+    
+    return { processedRows };
+  } catch (error) {
+    console.error("Error parsing file:", error);
+    return { processedRows: [] };
+  }
 }
