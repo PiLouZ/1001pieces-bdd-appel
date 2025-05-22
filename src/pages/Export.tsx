@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Navigation from "@/components/Navigation";
@@ -19,7 +20,7 @@ const Export: React.FC = () => {
     getAppliancesByPartReference
   } = useAppliances();
   
-  const [selectedFormat, setSelectedFormat] = useState<"csv" | "json">("csv");
+  const [selectedFormat, setSelectedFormat] = useState<"csv" | "html" | "json">("csv");
   const [includeHeader, setIncludeHeader] = useState(true);
   const [selectedPartReference, setSelectedPartReference] = useState("");
   const [exportType, setExportType] = useState<"all" | "by-part-reference">("all");
@@ -55,7 +56,6 @@ const Export: React.FC = () => {
         return;
       }
       
-      // Using the proper type for the format
       if (selectedFormat === "csv") {
         const csvContent = exportAppliances(appliancesToExport, { 
           format: "csv",
@@ -66,6 +66,26 @@ const Export: React.FC = () => {
         
         toast("Exportation réussie", {
           description: `${appliancesToExport.length} appareils ont été exportés au format CSV`
+        });
+      } else if (selectedFormat === "html") {
+        const htmlContent = exportAppliances(appliancesToExport, { 
+          format: "html",
+          includeHeader: includeHeader,
+          partReference: exportType === "by-part-reference" ? selectedPartReference : undefined
+        });
+        
+        const blob = new Blob([htmlContent], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `${fileName}.html`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        
+        toast("Exportation réussie", {
+          description: `${appliancesToExport.length} appareils ont été exportés au format HTML`
         });
       } else {
         const jsonContent = exportAppliances(appliancesToExport, { 
@@ -151,9 +171,10 @@ const Export: React.FC = () => {
               
               <div>
                 <h3 className="text-lg font-medium mb-2">Format</h3>
-                <Tabs defaultValue="csv" value={selectedFormat} onValueChange={(value) => setSelectedFormat(value as "csv" | "json")}>
-                  <TabsList className="grid w-full grid-cols-2">
+                <Tabs defaultValue="csv" value={selectedFormat} onValueChange={(value) => setSelectedFormat(value as "csv" | "html" | "json")}>
+                  <TabsList className="grid w-full grid-cols-3">
                     <TabsTrigger value="csv">CSV (Excel)</TabsTrigger>
+                    <TabsTrigger value="html">HTML</TabsTrigger>
                     <TabsTrigger value="json">JSON</TabsTrigger>
                   </TabsList>
                   <TabsContent value="csv" className="pt-4">
@@ -167,6 +188,19 @@ const Export: React.FC = () => {
                     </div>
                     <p className="text-sm text-gray-500 mt-2">
                       Format CSV compatible avec Excel et autres tableurs.
+                    </p>
+                  </TabsContent>
+                  <TabsContent value="html" className="pt-4">
+                    <div className="flex items-center space-x-2">
+                      <Switch 
+                        id="include-header-html" 
+                        checked={includeHeader} 
+                        onCheckedChange={setIncludeHeader} 
+                      />
+                      <Label htmlFor="include-header-html">Inclure en-tête des colonnes</Label>
+                    </div>
+                    <p className="text-sm text-gray-500">
+                      Format HTML pour l'affichage dans un navigateur.
                     </p>
                   </TabsContent>
                   <TabsContent value="json" className="pt-4">
