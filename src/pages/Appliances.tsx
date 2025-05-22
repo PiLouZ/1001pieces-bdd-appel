@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Navigation from "@/components/Navigation";
@@ -167,7 +166,6 @@ const Appliances: React.FC = () => {
     if (!selectedAppliance) {
       toast("Erreur", {
         description: "Veuillez sélectionner une option à conserver.",
-        variant: "destructive",
       });
       return;
     }
@@ -214,7 +212,6 @@ const Appliances: React.FC = () => {
     if (!selectedAppliance) {
       toast("Erreur", {
         description: "Veuillez sélectionner une option à conserver.",
-        variant: "destructive",
       });
       return;
     }
@@ -464,6 +461,33 @@ const Appliances: React.FC = () => {
                 selected={selectedAppliances}
                 onSelectAll={handleSelectAll}
                 onBulkUpdate={handleBulkUpdate}
+                onBulkDelete={() => {
+                  // Add bulk delete functionality
+                  const selectedIds = Object.entries(selectedAppliances)
+                    .filter(([_, selected]) => selected)
+                    .map(([id]) => id);
+                  
+                  if (selectedIds.length === 0) {
+                    toast("Aucun appareil sélectionné", {
+                      description: "Veuillez sélectionner au moins un appareil à supprimer."
+                    });
+                    return;
+                  }
+                  
+                  selectedIds.forEach(id => deleteAppliance(id));
+                  
+                  toast("Appareils supprimés", {
+                    description: `${selectedIds.length} appareil(s) ont été supprimés.`
+                  });
+                  
+                  // Clear selections
+                  setSelectedAppliances({});
+                }}
+                onDuplicatesCheck={handleCheckInconsistencies}
+                onShowDuplicates={handleCleanDuplicates}
+                duplicatesCount={duplicatesCount}
+                knownBrands={knownBrands}
+                knownTypes={knownTypes}
                 getPartReferencesForAppliance={getPartReferencesForAppliance}
               />
             </CardContent>

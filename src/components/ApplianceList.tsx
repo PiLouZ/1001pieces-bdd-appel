@@ -1,4 +1,3 @@
-
 // Import statements and types
 import React, { useState, useEffect } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -29,6 +28,7 @@ export interface ApplianceListProps {
   duplicatesCount: number;
   knownBrands: string[];
   knownTypes: string[];
+  getPartReferencesForAppliance?: (id: string) => string[];
 }
 
 const ApplianceList: React.FC<ApplianceListProps> = ({ 
@@ -44,7 +44,8 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
   onShowDuplicates,
   duplicatesCount,
   knownBrands,
-  knownTypes
+  knownTypes,
+  getPartReferencesForAppliance
 }) => {
   const [sortField, setSortField] = useState<keyof Appliance>("reference");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
@@ -407,7 +408,9 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
                   {appliance.dateAdded ? new Date(appliance.dateAdded).toLocaleDateString() : "-"}
                 </TableCell>
                 <TableCell>
-                  {appliance.partReferences ? appliance.partReferences.length : 0}
+                  {getPartReferencesForAppliance && appliance.id ? 
+                    (getPartReferencesForAppliance(appliance.id)?.length || 0) : 
+                    (appliance.partReferences?.length || 0)}
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end">

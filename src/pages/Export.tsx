@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Navigation from "@/components/Navigation";
@@ -29,8 +28,7 @@ const Export: React.FC = () => {
     try {
       if (exportType === "by-part-reference" && !selectedPartReference) {
         toast("Erreur", {
-          description: "Veuillez sélectionner une référence de pièce",
-          variant: "destructive"
+          description: "Veuillez sélectionner une référence de pièce"
         });
         return;
       }
@@ -90,8 +88,7 @@ const Export: React.FC = () => {
       }
     } catch (error) {
       toast("Erreur d'exportation", {
-        description: "Une erreur est survenue lors de l'exportation",
-        variant: "destructive"
+        description: "Une erreur est survenue lors de l'exportation"
       });
       console.error("Export error:", error);
     }

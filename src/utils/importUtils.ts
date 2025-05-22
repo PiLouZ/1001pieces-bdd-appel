@@ -1,4 +1,13 @@
+
 import { Appliance, ImportResult } from "@/types/appliance";
+
+// Define the ProcessedRow type for importing
+export interface ProcessedRow {
+  reference: string;
+  commercialRef: string;
+  brand: string;
+  type: string;
+}
 
 /**
  * Analyse le texte brut copié-collé et tente d'en extraire des appareils
@@ -354,3 +363,4 @@ export async function parseImportedFile(content: string): Promise<{ processedRow
     return { processedRows: [] };
   }
 }
+

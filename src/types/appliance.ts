@@ -1,4 +1,3 @@
-
 export interface Appliance {
   id: string;
   reference: string; // Référence technique
@@ -9,6 +8,7 @@ export interface Appliance {
   source?: string; // Pour savoir d'où vient l'information (copié/collé, PDF, saisie manuelle)
   additionalInfo?: string; // Pour stocker des informations supplémentaires si nécessaire
   lastUpdated?: string; // Date de dernière mise à jour
+  partReferences?: string[]; // References to compatible parts
 }
 
 export type ImportSource = "clipboard" | "pdf" | "manual";

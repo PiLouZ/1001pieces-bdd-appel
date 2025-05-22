@@ -2,133 +2,59 @@
 import { Appliance, ExportOptions } from "@/types/appliance";
 
 /**
- * Génère un CSV à partir des appareils
+ * Exports appliances to CSV or HTML format based on options
  */
-export function generateCSV(appliances: Appliance[], options: ExportOptions): string {
-  const { partReference, includeHeader = true } = options;
-  let csv = "";
+export function exportAppliances(appliances: Appliance[], options: ExportOptions): string {
+  const { format, includeHeader = true, partReference } = options;
   
-  // Ajout de l'en-tête
-  if (includeHeader) {
-    csv += "reference_piece,type,marque,modele,reference_technique,reference_commerciale\n";
-  }
-  
-  // Ajout des données
-  appliances.forEach(appliance => {
-    // Concaténation pour le modèle: "Référence technique - Référence commerciale"
-    const modele = appliance.commercialRef 
-      ? `${appliance.reference} - ${appliance.commercialRef}`
-      : appliance.reference;
-    
-    const row = [
-      escapeCSV(partReference),
-      escapeCSV(appliance.type),
-      escapeCSV(appliance.brand),
-      escapeCSV(modele),
-      escapeCSV(appliance.reference),
-      escapeCSV(appliance.commercialRef || "")
-    ];
-    csv += row.join(",") + "\n";
-  });
-  
-  return csv;
-}
-
-/**
- * Génère du HTML à partir des appareils
- */
-export function generateHTML(appliances: Appliance[], options: ExportOptions): string {
-  const { partReference } = options;
-  
-  let html = `
-<div class="compatible-appliances">
-  <h3>Appareils compatibles avec la pièce ${partReference}</h3>
-  <table class="compatibility-table">
-    <thead>
-      <tr>
-        <th>Marque</th>
-        <th>Type</th>
-        <th>Modèle</th>
-      </tr>
-    </thead>
-    <tbody>
-`;
-
-  // Grouper les appareils par marque
-  const appliancesByBrand = appliances.reduce((groups, appliance) => {
-    if (!groups[appliance.brand]) {
-      groups[appliance.brand] = [];
+  if (format === "csv") {
+    // Headers for the CSV
+    const headers = ["Référence technique", "Référence commerciale", "Marque", "Type", "Date d'ajout"];
+    if (partReference) {
+      headers.push("Référence de pièce");
     }
-    groups[appliance.brand].push(appliance);
-    return groups;
-  }, {} as Record<string, Appliance[]>);
-
-  // Construire les lignes du tableau groupées par marque
-  Object.entries(appliancesByBrand).forEach(([brand, brandAppliances]) => {
-    // Trier par type
-    const sortedByType = [...brandAppliances].sort((a, b) => a.type.localeCompare(b.type));
     
-    html += `
-      <tr class="brand-row">
-        <td rowspan="${sortedByType.length}">${brand}</td>
-        <td>${sortedByType[0].type}</td>
-        <td>${sortedByType[0].commercialRef 
-          ? `${sortedByType[0].reference} - ${sortedByType[0].commercialRef}` 
-          : sortedByType[0].reference}</td>
-      </tr>
-    `;
-
-    // Lignes suivantes pour cette marque (sans répéter la marque)
-    for (let i = 1; i < sortedByType.length; i++) {
-      const appliance = sortedByType[i];
-      html += `
-      <tr>
-        <td>${appliance.type}</td>
-        <td>${appliance.commercialRef 
-          ? `${appliance.reference} - ${appliance.commercialRef}` 
-          : appliance.reference}</td>
-      </tr>
-      `;
-    }
-  });
-
-  html += `
-    </tbody>
-  </table>
-</div>
-  `;
-
-  return html;
-}
-
-/**
- * Échappe les caractères spéciaux pour le CSV
- */
-function escapeCSV(value: string): string {
-  if (!value) return "";
-  const needsQuotes = value.includes(",") || value.includes("\"") || value.includes("\n");
-  
-  if (needsQuotes) {
-    return `"${value.replace(/"/g, '""')}"`;
+    // Start with headers if includeHeader is true
+    let csv = includeHeader ? headers.join(";") + "\n" : "";
+    
+    // Add each appliance as a row
+    appliances.forEach(appliance => {
+      const row = [
+        appliance.reference,
+        appliance.commercialRef || "",
+        appliance.brand,
+        appliance.type,
+        appliance.dateAdded
+      ];
+      
+      if (partReference) {
+        row.push(partReference);
+      }
+      
+      csv += row.join(";") + "\n";
+    });
+    
+    return csv;
+  } else {
+    // Return JSON string for other formats
+    return JSON.stringify(appliances, null, 2);
   }
-  
-  return value;
 }
 
 /**
- * Prépare un fichier à télécharger
+ * Downloads CSV content as a file
  */
-export function downloadFile(content: string, fileName: string, contentType: string): void {
-  const blob = new Blob([content], { type: contentType });
+export function downloadCSV(csvContent: string, fileName: string = "export.csv") {
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const link = document.createElement("a");
+  
   const url = URL.createObjectURL(blob);
+  link.setAttribute("href", url);
+  link.setAttribute("download", `${fileName}.csv`);
+  link.style.visibility = "hidden";
   
-  const downloadLink = document.createElement("a");
-  downloadLink.href = url;
-  downloadLink.download = fileName;
-  
-  document.body.appendChild(downloadLink);
-  downloadLink.click();
-  document.body.removeChild(downloadLink);
-  
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
   URL.revokeObjectURL(url);
 }
