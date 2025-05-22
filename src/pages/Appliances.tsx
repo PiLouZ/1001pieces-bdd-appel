@@ -82,12 +82,10 @@ const AppliancessPage: React.FC = () => {
     setInconsistentCount(inconsistent.length);
     if (inconsistent.length === 0) {
       toast({
-        title: "Aucune incohérence détectée",
         description: "Tous les appareils ont une marque et un type.",
       });
     } else {
       toast({
-        title: "Incohérences détectées",
         description: `${inconsistent.length} appareils ont des informations manquantes.`,
       });
     }
@@ -95,9 +93,8 @@ const AppliancessPage: React.FC = () => {
 
   const cleanDuplicates = () => {
     const deletedCount = cleanDatabase();
-    toastWithProgress({
-      title: "Doublons supprimés",
-      description: `${deletedCount} doublons ont été supprimés de la base de données.`,
+    toastWithProgress("Doublons supprimés", {
+      description: `${deletedCount} doublons ont été supprimés de la base de données.`
     });
   };
 
@@ -114,7 +111,6 @@ const AppliancessPage: React.FC = () => {
     });
 
     setDuplicateCount(duplicates.length);
-    return duplicates.length;
   }, [appliances]);
 
   const handleBulkDelete = (ids: string[]) => {
@@ -155,9 +151,8 @@ const AppliancessPage: React.FC = () => {
       const updatedCount = updateMultipleAppliances(selectedIds, {
         [field]: value,
       });
-      toastWithProgress({
-        title: "Mise à jour effectuée",
-        description: `${updatedCount} appareils ont été mis à jour.`,
+      toastWithProgress("Mise à jour effectuée", {
+        description: `${updatedCount} appareils ont été mis à jour.`
       });
       setSelectedAppliances({});
     }
@@ -165,9 +160,8 @@ const AppliancessPage: React.FC = () => {
 
   const handleClearDatabase = () => {
     clearDatabase();
-    toastWithProgress({
-      title: "Base de données effacée",
-      description: "Toutes les données ont été supprimées.",
+    toastWithProgress("Base de données effacée", {
+      description: "Toutes les données ont été supprimées."
     });
   };
 

@@ -189,7 +189,6 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
     
     if (selectedCount === 0) {
       toast({
-        title: "Aucun appareil sélectionné",
         description: "Veuillez sélectionner au moins un appareil à supprimer.",
         variant: "destructive",
       });
@@ -207,9 +206,8 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
       
       onBulkDelete(selectedIds);
       
-      toastWithProgress({
-        title: "Suppression effectuée",
-        description: `${selectedIds.length} appareil(s) ont été supprimés.`,
+      toastWithProgress("Suppression effectuée", {
+        description: `${selectedIds.length} appareil(s) ont été supprimés.`
       });
       
       setConfirmBulkDelete(false);

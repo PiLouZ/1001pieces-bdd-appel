@@ -1,6 +1,6 @@
 
 import { useTheme } from "next-themes"
-import { Toaster as Sonner, toast } from "sonner"
+import { Toaster as Sonner, toast as sonnerToast } from "sonner"
 import { Progress } from "@/components/ui/progress"
 import { useState, useEffect } from "react"
 
@@ -46,18 +46,18 @@ const Toaster = ({ ...props }: ToasterProps) => {
             "group-[.toast]:bg-muted group-[.toast]:text-muted-foreground",
         },
       }}
-      {...props}
+      {...props as any}
     />
   )
 }
 
 // Enhanced toast with progress bar
-const toastWithProgress = (props: Parameters<typeof toast>[0]) => {
-  return toast({
-    ...props,
+const toastWithProgress = (message: string | React.ReactNode, options?: any) => {
+  return sonnerToast(message, {
     duration: 5000,
+    ...options,
     footer: () => <ToastProgress duration={5000} />,
   })
 }
 
-export { Toaster, toast, toastWithProgress }
+export { Toaster, sonnerToast as toast, toastWithProgress }

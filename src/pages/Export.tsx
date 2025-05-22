@@ -1,3 +1,4 @@
+
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -54,11 +55,11 @@ const ExportPage: React.FC = () => {
     let contentType: string;
 
     if (exportFormat === "csv") {
-      content = generateCSV(appliances, { partReference: selectedPartReference, includeHeader: true });
+      content = generateCSV(appliances, { partReference: selectedPartReference, format: exportFormat, includeHeader: true });
       fileName = `appliances_for_${selectedPartReference}.csv`;
       contentType = "text/csv";
     } else {
-      content = generateHTML(appliances, { partReference: selectedPartReference });
+      content = generateHTML(appliances, { partReference: selectedPartReference, format: exportFormat });
       fileName = `appliances_for_${selectedPartReference}.html`;
       contentType = "text/html";
     }

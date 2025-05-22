@@ -40,6 +40,7 @@ import {
 } from "@/components/ui/select";
 import { toastWithProgress } from "@/components/ui/sonner";
 import { useNavigate } from 'react-router-dom';
+import { Appliance, ImportSession, ImportSource } from "@/types/appliance";
 
 interface ProcessedRow {
   reference: string;
@@ -221,21 +222,26 @@ const ImportPage: React.FC = () => {
     // Create an import session for later resumption
     if (processedRows.length > 0) {
       const sessionId = `import-${Date.now()}`;
-      const session = {
+      const session: ImportSession = {
         id: sessionId,
-        date: new Date().toISOString(),
-        totalRows: processedRows.length,
-        incompleteRows: incompleteRows.length,
-        partReference: partReferenceValue,
-        data: processedRows
+        appliances: processedRows.map(row => ({
+          id: '',
+          reference: row.reference,
+          commercialRef: row.commercialRef,
+          brand: row.brand,
+          type: row.type,
+          dateAdded: new Date().toISOString(),
+        })),
+        createdAt: new Date().toISOString(),
+        name: `Import ${new Date().toLocaleDateString()}`,
+        partReference: partReferenceValue
       };
       
       saveImportSession(sessionId, session);
       setCurrentSessionId(sessionId);
       
-      toastWithProgress({
-        title: "Session d'importation créée",
-        description: `La session ${sessionId} a été sauvegardée et peut être reprise ultérieurement.`,
+      toastWithProgress("Session d'importation créée", {
+        description: `La session ${sessionId} a été sauvegardée et peut être reprise ultérieurement.`
       });
     }
   };
@@ -259,18 +265,20 @@ const ImportPage: React.FC = () => {
   const handleFinalizeImport = (rows: ProcessedRow[]) => {
     setIsImporting(true);
     
-    // Préparer les données à importer
+    // Prepare the data to import
     const appliancesToImport = rows.map(row => ({
+      id: '',
       reference: row.reference,
       brand: row.brand,
       type: row.type,
-      commercialRef: row.commercialRef
+      commercialRef: row.commercialRef,
+      dateAdded: new Date().toISOString()
     }));
     
-    // Importer les appareils
+    // Import the appliances
     const importedCount = importAppliances(appliancesToImport);
     
-    // Associer les appareils à la référence de pièce
+    // Associate appliances with the part reference
     if (partReference) {
       const importedApplianceRefs = appliancesToImport.map(app => app.reference);
       
@@ -286,12 +294,11 @@ const ImportPage: React.FC = () => {
     setIsImporting(false);
     setShowCompletionDialog(false);
     
-    toastWithProgress({
-      title: "Importation terminée",
-      description: `${importedCount} appareils importés avec succès.`,
+    toastWithProgress("Importation terminée", {
+      description: `${importedCount} appareils importés avec succès.`
     });
     
-    // Rediriger vers la page des appareils
+    // Redirect to appliances page
     navigate('/appliances');
   };
 
