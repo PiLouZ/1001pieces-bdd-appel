@@ -1,3 +1,4 @@
+
 export interface Appliance {
   id: string;
   reference: string; // Référence technique
@@ -22,8 +23,8 @@ export interface ImportResult {
 }
 
 export interface ExportOptions {
-  partReference: string;
-  format: "csv" | "html";
+  partReference?: string;
+  format: "csv" | "html" | "json";
   includeHeader?: boolean;
 }
 

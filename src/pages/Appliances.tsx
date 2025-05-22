@@ -269,8 +269,7 @@ const Appliances: React.FC = () => {
   const handleBulkUpdate = (field: keyof Omit<Partial<Appliance>, "id">, value: string) => {
     if (selectedIds.length === 0) {
       toast("Aucun appareil sélectionné", {
-        description: "Veuillez sélectionner au moins un appareil à modifier.",
-        variant: "destructive",
+        description: "Veuillez sélectionner au moins un appareil à modifier."
       });
       return;
     }
@@ -278,7 +277,7 @@ const Appliances: React.FC = () => {
     const updateCount = updateMultipleAppliances(selectedIds, { [field]: value });
     
     toast("Mise à jour effectuée", {
-      description: `${updateCount} appareils ont été mis à jour.`,
+      description: `${updateCount} appareils ont été mis à jour.`
     });
     
     // Réinitialiser les sélections
@@ -292,8 +291,7 @@ const Appliances: React.FC = () => {
   const handleOpenAddPartDialog = () => {
     if (selectedIds.length === 0) {
       toast("Aucun appareil sélectionné", {
-        description: "Veuillez sélectionner au moins un appareil pour associer une référence de pièce.",
-        variant: "destructive"
+        description: "Veuillez sélectionner au moins un appareil pour associer une référence de pièce."
       });
       return;
     }
@@ -305,16 +303,14 @@ const Appliances: React.FC = () => {
     
     if (!partRef.trim()) {
       toast("Erreur", {
-        description: "Veuillez spécifier une référence de pièce",
-        variant: "destructive"
+        description: "Veuillez spécifier une référence de pièce"
       });
       return;
     }
     
     if (selectedIds.length === 0) {
       toast("Aucun appareil sélectionné", {
-        description: "Veuillez sélectionner au moins un appareil",
-        variant: "destructive"
+        description: "Veuillez sélectionner au moins un appareil"
       });
       return;
     }
@@ -329,7 +325,7 @@ const Appliances: React.FC = () => {
     setNewPartReference("");
     setSelectedPartReference("");
   };
-  
+
   const handleCleanDuplicates = () => {
     const removedCount = cleanDatabase();
     
