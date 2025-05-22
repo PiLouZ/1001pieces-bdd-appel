@@ -1,7 +1,31 @@
+
 import { useTheme } from "next-themes"
 import { Toaster as Sonner, toast } from "sonner"
+import { Progress } from "@/components/ui/progress"
+import { useState, useEffect } from "react"
 
 type ToasterProps = React.ComponentProps<typeof Sonner>
+
+// Progress component for toast timer
+const ToastProgress = ({ duration = 5000 }) => {
+  const [progress, setProgress] = useState(0)
+  
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setProgress((prevProgress) => {
+        if (prevProgress >= 100) {
+          clearInterval(interval)
+          return 100
+        }
+        return prevProgress + (100 / (duration / 100))
+      })
+    }, 100)
+    
+    return () => clearInterval(interval)
+  }, [duration])
+  
+  return <Progress value={progress} className="h-1 mt-1" />
+}
 
 const Toaster = ({ ...props }: ToasterProps) => {
   const { theme = "system" } = useTheme()
@@ -10,6 +34,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
     <Sonner
       theme={theme as ToasterProps["theme"]}
       className="toaster group"
+      duration={5000} // Auto-dismiss after 5 seconds
       toastOptions={{
         classNames: {
           toast:
@@ -26,4 +51,13 @@ const Toaster = ({ ...props }: ToasterProps) => {
   )
 }
 
-export { Toaster, toast }
+// Enhanced toast with progress bar
+const toastWithProgress = (props: Parameters<typeof toast>[0]) => {
+  return toast({
+    ...props,
+    duration: 5000,
+    footer: () => <ToastProgress duration={5000} />,
+  })
+}
+
+export { Toaster, toast, toastWithProgress }

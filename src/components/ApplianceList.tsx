@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from "react";
 import { 
   Table, 
@@ -24,7 +23,7 @@ import {
   Card, 
   CardContent
 } from "@/components/ui/card";
-import { ChevronDown, ChevronUp, MoreHorizontal, Pencil, Trash2, Tag, Check, Plus } from "lucide-react";
+import { ChevronDown, ChevronUp, MoreHorizontal, Pencil, Trash2, Tag, Check, Plus, Trash } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useAppliances } from "@/hooks/useAppliances";
@@ -38,6 +37,7 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
+import { toastWithProgress } from "@/components/ui/sonner";
 
 interface ApplianceListProps {
   appliances: Appliance[];
@@ -47,7 +47,8 @@ interface ApplianceListProps {
   selected?: ApplianceSelection;
   onSelectAll?: (selected: boolean) => void;
   onBulkUpdate?: (field: "brand" | "type", value: string) => void;
-  getPartReferencesForAppliance?: (applianceId: string) => string[];
+  onBulkDelete?: (ids: string[]) => void;
+  getPartReferencesForAppliance: (applianceId: string) => string[];
 }
 
 type SortField = "reference" | "commercialRef" | "brand" | "type";
@@ -61,7 +62,9 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
   onSelect,
   selected = {},
   onSelectAll,
-  onBulkUpdate
+  onBulkUpdate,
+  onBulkDelete,
+  getPartReferencesForAppliance
 }) => {
   const [sortField, setSortField] = useState<SortField>("reference");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
@@ -73,10 +76,11 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
   const [selectedApplianceForParts, setSelectedApplianceForParts] = useState<Appliance | null>(null);
   const [newPartReference, setNewPartReference] = useState("");
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState<boolean>(false);
   const editInputRef = useRef<HTMLInputElement>(null);
   const bulkInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
-  const { getPartReferencesForAppliance, knownBrands, knownTypes, associateApplicancesToPartReference, knownPartReferences } = useAppliances();
+  const { associateApplicancesToPartReference, knownPartReferences, knownBrands, knownTypes } = useAppliances();
 
   useEffect(() => {
     if (editingField && editInputRef.current) {
@@ -180,6 +184,42 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
     setBulkUpdateValue("");
   };
 
+  const handleBulkDeleteClick = () => {
+    const selectedCount = Object.entries(selected).filter(([_, isSelected]) => isSelected).length;
+    
+    if (selectedCount === 0) {
+      toast({
+        title: "Aucun appareil sélectionné",
+        description: "Veuillez sélectionner au moins un appareil à supprimer.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setConfirmBulkDelete(true);
+  };
+  
+  const confirmBulkDeleteAction = () => {
+    if (onBulkDelete) {
+      const selectedIds = Object.entries(selected)
+        .filter(([_, isSelected]) => isSelected)
+        .map(([id, _]) => id);
+      
+      onBulkDelete(selectedIds);
+      
+      toastWithProgress({
+        title: "Suppression effectuée",
+        description: `${selectedIds.length} appareil(s) ont été supprimés.`,
+      });
+      
+      setConfirmBulkDelete(false);
+    }
+  };
+  
+  const cancelBulkDelete = () => {
+    setConfirmBulkDelete(false);
+  };
+
   const handleShowCompatibleParts = (appliance: Appliance) => {
     setSelectedApplianceForParts(appliance);
     setNewPartReference("");
@@ -199,14 +239,16 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
     // Associer l'appareil à la nouvelle référence de pièce
     associateApplicancesToPartReference([selectedApplianceForParts.id], newPartReference);
     
-    toast({
+    toastWithProgress({
       title: "Pièce compatible ajoutée",
       description: `L'appareil ${selectedApplianceForParts.reference} est maintenant compatible avec la pièce ${newPartReference}.`,
     });
 
     setNewPartReference("");
-    // Actualiser le dialogue
-    setSelectedApplianceForParts({...selectedApplianceForParts});
+    // Forcer une mise à jour pour actualiser le compteur de pièces compatibles
+    setTimeout(() => {
+      setSelectedApplianceForParts({...selectedApplianceForParts});
+    }, 100);
   };
 
   const handleDeleteClick = (id: string) => {
@@ -323,6 +365,23 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
               </TableRow>
             </TableHeader>
             <TableBody>
+              {Object.values(selected).some(Boolean) && (
+                <TableRow>
+                  {onSelect && <TableCell></TableCell>}
+                  <TableCell colSpan={5} className="py-2">
+                    <Button 
+                      variant="destructive" 
+                      size="sm"
+                      onClick={handleBulkDeleteClick}
+                      className="flex items-center"
+                    >
+                      <Trash className="h-4 w-4 mr-1" />
+                      Supprimer la sélection ({Object.values(selected).filter(Boolean).length})
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              )}
+              
               {bulkUpdateField && (
                 <TableRow>
                   {onSelect && <TableCell></TableCell>}
@@ -565,6 +624,22 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
             <DialogFooter>
               <Button variant="outline" onClick={cancelDelete}>Annuler</Button>
               <Button variant="destructive" onClick={confirmDelete}>Supprimer</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        
+        <Dialog open={confirmBulkDelete} onOpenChange={setConfirmBulkDelete}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Confirmer la suppression en masse</DialogTitle>
+              <DialogDescription>
+                Êtes-vous sûr de vouloir supprimer {Object.values(selected).filter(Boolean).length} appareil(s) ? 
+                Cette action ne peut pas être annulée.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={cancelBulkDelete}>Annuler</Button>
+              <Button variant="destructive" onClick={confirmBulkDeleteAction}>Supprimer</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
