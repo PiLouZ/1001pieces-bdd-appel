@@ -1,691 +1,604 @@
-import React, { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+
+import React, { useState, useCallback, useEffect } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Navigation from "@/components/Navigation";
-import ImportForm from "@/components/ImportForm";
-import { useAppliances } from "@/hooks/useAppliances";
-import { Appliance, ImportSession } from "@/types/appliance";
+import { parseImportedFile, ProcessedRow } from "@/utils/importUtils";
+import { FileUp, Database, AlertCircle, Check, Import as ImportIcon } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { Tabs, TabsList, TabsContent, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
-import { generateCSV, downloadFile } from "@/utils/exportUtils";
-import { Link } from "react-router-dom";
-import { FileText, Import as ImportIcon, Save, Clock, Edit } from "lucide-react";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import ImportForm from "@/components/ImportForm";
+import MissingInfoForm from "@/components/MissingInfoForm";
+import { useDropzone } from "react-dropzone";
+import { useAppliances } from "@/hooks/useAppliances";
+import { Appliance } from "@/types/appliance";
 
 const Import: React.FC = () => {
-  const {
-    appliances,
-    importAppliances,
-    knownBrands,
-    knownTypes,
-    knownPartReferences,
-    suggestBrand,
-    suggestType,
-    associateApplicancesToPartReference,
+  const { 
+    importAppliances, 
+    appliances: allAppliances,
     saveImportSession,
     getImportSession,
-    deleteImportSession
+    deleteImportSession,
+    suggestBrand,
+    suggestType,
+    knownPartReferences
   } = useAppliances();
   
+  const [importStep, setImportStep] = useState<"upload" | "preview" | "complete" | "missingInfo">("upload");
+  const [file, setFile] = useState<File | null>(null);
+  const [processedData, setProcessedData] = useState<ProcessedRow[]>([]);
+  const [previewData, setPreviewData] = useState<ProcessedRow[]>([]);
+  const [selectedPreviewRows, setSelectedPreviewRows] = useState<number>(10);
+  const [importedCount, setImportedCount] = useState(0);
+  const [duplicateCount, setDuplicateCount] = useState(0);
+  const [importSessionId, setImportSessionId] = useState("");
   const [partReference, setPartReference] = useState("");
-  const [sessionName, setSessionName] = useState("");
-  const [importedAppliances, setImportedAppliances] = useState<Appliance[] | null>(null);
-  const [incompleteAppliances, setIncompleteAppliances] = useState<Appliance[]>([]);
-  const [showExportOption, setShowExportOption] = useState(false);
-  const [showExportDialog, setShowExportDialog] = useState(false);
-  const [showReferenceDialog, setShowReferenceDialog] = useState(false);
-  const [showSaveSessionDialog, setShowSaveSessionDialog] = useState(false);
-  const [pendingAppliances, setPendingAppliances] = useState<Appliance[]>([]);
-  const [isTwoColumnFormat, setIsTwoColumnFormat] = useState(false);
-  const [showSessionsDialog, setShowSessionsDialog] = useState(false);
-  const [savedSessions, setSavedSessions] = useState<ImportSession[]>([]);
-  const [currentSession, setCurrentSession] = useState<ImportSession | null>(null);
+  const [incompleteTotalCount, setIncompleteTotalCount] = useState(0);
+  const [currentIncompleteIndex, setCurrentIncompleteIndex] = useState(0);
+  const [processedCount, setProcessedCount] = useState(0);
+  
+  // State pour les appareils identifiés dans la base comme similaires
+  const [identifiedAppliances, setIdentifiedAppliances] = useState<{[key: string]: Appliance | null}>({});
 
-  // Charger les sessions sauvegardées
-  useEffect(() => {
-    const sessionsData = localStorage.getItem("importSessions");
-    if (sessionsData) {
-      try {
-        const sessions = JSON.parse(sessionsData);
-        setSavedSessions(Object.values(sessions));
-      } catch (e) {
-        console.error("Erreur lors du chargement des sessions:", e);
-      }
-    }
-  }, []);
-
-  const processImport = (appliances: Appliance[], isTwoColumns: boolean) => {
-    // Pour le format à 2 colonnes, on demande la référence si nécessaire
-    if (isTwoColumns && !partReference.trim()) {
-      setPendingAppliances(appliances);
-      setIsTwoColumnFormat(true);
-      setShowReferenceDialog(true);
-      return;
-    }
-
-    // Préparer les appareils qui nécessitent des informations supplémentaires
-    let appliancesToComplete: Appliance[] = [];
-    let appliancesToImport: Appliance[] = [];
+  // Fonction de callback pour le drop de fichier
+  const onDrop = useCallback((acceptedFiles: File[]) => {
+    if (acceptedFiles.length === 0) return;
     
-    appliances.forEach(appliance => {
-      let updatedAppliance = { ...appliance };
-      let isComplete = true;
-      let foundInDatabase = false;
-      
-      // NOUVEAU: Rechercher si l'appareil existe déjà dans la base
-      const existingAppliance = appliances.find(a => a.reference === updatedAppliance.reference);
-      
-      if (existingAppliance) {
-        // Si l'appareil existe, utiliser ses informations
-        updatedAppliance.brand = existingAppliance.brand;
-        updatedAppliance.type = existingAppliance.type;
-        foundInDatabase = true;
-      } else {
-        // Si la marque est manquante, essayer de la suggérer
-        if (!updatedAppliance.brand || updatedAppliance.brand.trim() === "") {
-          const suggestedBrand = suggestBrand(updatedAppliance.reference);
-          if (suggestedBrand) {
-            updatedAppliance.brand = suggestedBrand;
-          } else {
-            isComplete = false;
-          }
+    const uploadedFile = acceptedFiles[0];
+    setFile(uploadedFile);
+    
+    // Générer un ID de session
+    const sessionId = `import-${Date.now()}`;
+    setImportSessionId(sessionId);
+    
+    // Lire et traiter le fichier
+    const reader = new FileReader();
+    
+    reader.onload = async (e) => {
+      try {
+        if (!e.target?.result) return;
+        
+        const content = e.target.result as string;
+        const { processedRows } = await parseImportedFile(content);
+        
+        // Vérifier si le fichier contient des données
+        if (processedRows.length === 0) {
+          toast("Erreur", {
+            description: "Le fichier ne contient aucune donnée valide",
+            variant: "destructive"
+          });
+          return;
         }
-
-        // Si le type est manquant et qu'on a une marque, essayer de le suggérer
-        if ((!updatedAppliance.type || updatedAppliance.type.trim() === "") && updatedAppliance.brand) {
-          const suggestedType = suggestType(updatedAppliance.reference, updatedAppliance.brand);
-          if (suggestedType) {
-            updatedAppliance.type = suggestedType;
-          } else {
-            isComplete = false;
+        
+        // Rechercher automatiquement les correspondances dans la base de données
+        const updatedRows = [...processedRows];
+        const identified: {[key: string]: Appliance | null} = {};
+        
+        updatedRows.forEach((row, index) => {
+          if (row.reference) {
+            // Chercher un appareil avec la même référence
+            const existingAppliance = allAppliances.find(app => app.reference === row.reference);
+            identified[index] = existingAppliance || null;
+            
+            // Si l'appareil existe et qu'il manque des infos dans notre import, les compléter
+            if (existingAppliance) {
+              if (!row.brand) row.brand = existingAppliance.brand;
+              if (!row.type) row.type = existingAppliance.type;
+              if (!row.commercialRef) row.commercialRef = existingAppliance.commercialRef || "";
+            } else {
+              // Suggérer des valeurs si possible
+              if (!row.brand) {
+                const suggestedBrand = suggestBrand(row.reference);
+                if (suggestedBrand) row.brand = suggestedBrand;
+              }
+              
+              if (!row.type && row.brand) {
+                const suggestedType = suggestType(row.reference, row.brand);
+                if (suggestedType) row.type = suggestedType;
+              }
+            }
           }
+        });
+        
+        setIdentifiedAppliances(identified);
+        setProcessedData(updatedRows);
+        setPreviewData(updatedRows.slice(0, selectedPreviewRows));
+        
+        // Vérifier s'il y a des données incomplètes
+        const incompleteRows = updatedRows.filter(
+          row => !identified[updatedRows.indexOf(row)] && (
+            !row.brand || row.brand.trim() === "" || 
+            !row.type || row.type.trim() === ""
+          )
+        );
+        
+        if (incompleteRows.length > 0) {
+          setIncompleteTotalCount(incompleteRows.length);
+          // Sauvegarder la session
+          saveImportSession(sessionId, {
+            id: sessionId,
+            createdAt: new Date().toISOString(),
+            appliances: updatedRows.map(row => ({
+              reference: row.reference,
+              commercialRef: row.commercialRef,
+              brand: row.brand,
+              type: row.type,
+              id: "",
+              dateAdded: new Date().toISOString()
+            }))
+          });
+          
+          setImportStep("missingInfo");
+        } else {
+          setImportStep("preview");
         }
+      } catch (error) {
+        console.error("Error parsing file:", error);
+        toast("Erreur", {
+          description: "Impossible de lire le fichier. Vérifiez le format.",
+          variant: "destructive"
+        });
       }
+    };
+    
+    reader.readAsText(uploadedFile);
+  }, [allAppliances, saveImportSession, selectedPreviewRows, suggestBrand, suggestType]);
+  
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    accept: {
+      'text/csv': ['.csv'],
+      'application/vnd.ms-excel': ['.csv', '.xls'],
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
+      'text/plain': ['.txt'],
+    },
+    multiple: false
+  });
 
-      // Ajouter l'appareil dans la catégorie appropriée
-      if (foundInDatabase || isComplete) {
-        appliancesToImport.push(updatedAppliance);
-      } else {
-        appliancesToComplete.push(updatedAppliance);
+  const handleImport = () => {
+    try {
+      if (processedData.length === 0) {
+        toast("Erreur", {
+          description: "Aucune donnée à importer",
+          variant: "destructive"
+        });
+        return;
       }
-    });
-
-    // S'il reste des appareils incomplets, montrer le formulaire pour les compléter
-    if (appliancesToComplete.length > 0) {
-      setIncompleteAppliances(appliancesToComplete);
-      toast({
-        title: "Information",
-        description: `${appliancesToComplete.length} appareils ont besoin de compléments d'informations.`,
+      
+      // Préparer les appareils à importer
+      const appliancesToImport: Appliance[] = processedData.map(row => ({
+        id: "",  // L'ID sera généré par la fonction importAppliances
+        reference: row.reference,
+        commercialRef: row.commercialRef,
+        brand: row.brand,
+        type: row.type,
+        dateAdded: new Date().toISOString()
+      }));
+      
+      // Filtrer les doublons déjà présents dans la base
+      const existingRefs = new Set(allAppliances.map(app => app.reference));
+      const newAppliances = appliancesToImport.filter(app => !existingRefs.has(app.reference));
+      const duplicates = appliancesToImport.length - newAppliances.length;
+      
+      // Importer les appareils
+      const importedCount = importAppliances(newAppliances);
+      
+      setImportedCount(importedCount);
+      setDuplicateCount(duplicates);
+      
+      // Si une référence de pièce est spécifiée, l'associer aux appareils importés
+      if (partReference.trim()) {
+        // Récupérer les IDs des nouveaux appareils (ils sont générés lors de l'importation)
+        const importedRefs = newAppliances.map(app => app.reference);
+        const importedApplianceIds = allAppliances
+          .filter(app => importedRefs.includes(app.reference))
+          .map(app => app.id);
+        
+        // Associer la référence de pièce
+        // associateApplicancesToPartReference(importedApplianceIds, partReference);
+      }
+      
+      toast("Importation réussie", {
+        description: `${importedCount} appareils importés (${duplicates} doublons ignorés)`
       });
       
-      // Si on a des appareils complets, les traiter immédiatement
-      if (appliancesToImport.length > 0) {
-        handleDirectImport(appliancesToImport);
+      // Nettoyer la session d'importation
+      if (importSessionId) {
+        deleteImportSession(importSessionId);
+        setImportSessionId("");
       }
-      return;
+      
+      setImportStep("complete");
+    } catch (error) {
+      console.error("Import error:", error);
+      toast("Erreur d'importation", {
+        description: "Une erreur est survenue lors de l'importation",
+        variant: "destructive"
+      });
     }
-
-    // Tous les appareils sont complets, les importer
-    handleDirectImport(appliancesToImport);
   };
   
-  // Nouvelle fonction pour gérer l'importation directe
-  const handleDirectImport = (appliancesToImport: Appliance[]) => {
-    // Ajouter les appareils complétés à la base de données
-    const importedCount = importAppliances(appliancesToImport);
-
-    // Si une référence de pièce est fournie, associer les appareils à cette référence
-    if (partReference.trim()) {
-      // Stocker la référence de la pièce dans une session temporaire
-      const importSession: ImportSession = {
-        id: `session_${Date.now()}`,
-        partReference,
-        appliances: appliancesToImport,
-        createdAt: new Date().toISOString()
-      };
-      
-      // Sauvegarder temporairement pour l'export actuel
-      localStorage.setItem("lastImportSession", JSON.stringify(importSession));
-
-      // IMPORTANT: Pour corriger le problème d'association, on doit récupérer les IDs des appareils après importation
-      const applianceRefs = appliancesToImport.map(app => app.reference);
-      // Trouver les appareils correspondants dans la base de données (pour avoir les bons IDs)
-      const matchingAppliances = appliances.filter(app => applianceRefs.includes(app.reference));
-      // Extraire seulement les IDs pour l'association
-      const applianceIds = matchingAppliances.map(app => app.id);
-      
-      // Associer tous les appareils importés à la référence de pièce avec les IDs corrects
-      associateApplicancesToPartReference(applianceIds, partReference);
-      
-      toast({
-        title: "Importation réussie",
-        description: `${importedCount} nouveaux appareils ajoutés et ${matchingAppliances.length} appareils associés à la référence ${partReference}.`
-      });
-
-      // Proposer l'export via une boîte de dialogue
-      setImportedAppliances(appliancesToImport);
-      setShowExportDialog(true); // Afficher la boîte de dialogue d'abord
-      setShowExportOption(true); // Puis conserver l'option en bas de page
+  const handleMissingInfoUpdate = (updatedData: ProcessedRow) => {
+    // Mettre à jour les données traitées
+    const newProcessedData = [...processedData];
+    newProcessedData[currentIncompleteIndex] = updatedData;
+    setProcessedData(newProcessedData);
+    
+    // Mettre à jour la session d'importation
+    if (importSessionId) {
+      const session = getImportSession(importSessionId);
+      if (session) {
+        const updatedAppliances = [...session.appliances];
+        updatedAppliances[currentIncompleteIndex] = {
+          ...updatedAppliances[currentIncompleteIndex],
+          brand: updatedData.brand,
+          type: updatedData.type,
+          commercialRef: updatedData.commercialRef
+        };
+        
+        saveImportSession(importSessionId, {
+          ...session,
+          appliances: updatedAppliances
+        });
+      }
+    }
+    
+    // Incrémenter le compteur de traitement
+    setProcessedCount(prev => prev + 1);
+    
+    // Passer à la prochaine ligne incomplète
+    const incompleteIndices = processedData
+      .map((row, index) => (!identifiedAppliances[index] && (!row.brand || !row.type)) ? index : -1)
+      .filter(index => index !== -1);
+    
+    const currentIndexPosition = incompleteIndices.indexOf(currentIncompleteIndex);
+    if (currentIndexPosition < incompleteIndices.length - 1) {
+      // Passer à la prochaine ligne incomplète
+      setCurrentIncompleteIndex(incompleteIndices[currentIndexPosition + 1]);
     } else {
-      toast({
-        title: "Importation réussie",
-        description: `${importedCount} nouveaux appareils ajoutés à la base de données.`
-      });
-      setImportedAppliances(null);
-      setShowExportOption(false);
+      // Toutes les lignes ont été traitées
+      setImportStep("preview");
     }
-    
-    if (importedCount < appliancesToImport.length) {
-      toast({
-        title: "Information",
-        description: `${appliancesToImport.length - importedCount} appareils étaient déjà dans la base de données.`
-      });
-    }
-  };
-
-  const handleImport = (appliances: Appliance[]) => {
-    // Vérifier s'il s'agit d'un format à 2 colonnes
-    const is2ColFormat = appliances.every(app => 
-      app.reference && app.commercialRef !== undefined && 
-      (!app.brand || app.brand.trim() === "") && 
-      (!app.type || app.type.trim() === "")
-    );
-    
-    setIsTwoColumnFormat(is2ColFormat);
-    processImport(appliances, is2ColFormat);
-  };
-
-  const confirmPartReference = () => {
-    if (!partReference.trim()) {
-      toast({
-        title: "Erreur",
-        description: "Veuillez spécifier une référence de pièce",
-        variant: "destructive"
-      });
-      return;
-    }
-    setShowReferenceDialog(false);
-    processImport(pendingAppliances, isTwoColumnFormat);
-  };
-
-  const handleExportImported = () => {
-    if (!importedAppliances || importedAppliances.length === 0) {
-      toast({
-        title: "Erreur",
-        description: "Aucune donnée à exporter",
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    const exportOptions = {
-      partReference: partReference,
-      format: "csv" as const,
-      includeHeader: true
-    };
-    
-    const csvContent = generateCSV(importedAppliances, exportOptions);
-    const fileName = `compatibilite_${partReference.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.csv`;
-    downloadFile(csvContent, fileName, "text/csv;charset=utf-8");
-    
-    toast({
-      title: "Export réussi",
-      description: `Le fichier ${fileName} a été généré.`
-    });
-    
-    setShowExportDialog(false);
-  };
-
-  const handleSelectPartReference = (value: string) => {
-    setPartReference(value);
   };
   
-  const handleSaveSession = () => {
-    if (!sessionName.trim()) {
-      toast({
-        title: "Erreur",
-        description: "Veuillez donner un nom à cette session",
-        variant: "destructive"
+  const handleCompleteImport = () => {
+    try {
+      if (processedData.length === 0) return;
+      
+      // Filtrer les doublons
+      const existingRefs = new Set(allAppliances.map(app => app.reference));
+      const appliancesToImport = processedData
+        .filter(row => !existingRefs.has(row.reference))
+        .map(row => ({
+          reference: row.reference,
+          commercialRef: row.commercialRef,
+          brand: row.brand,
+          type: row.type
+        }));
+      
+      const duplicates = processedData.length - appliancesToImport.length;
+      
+      // Importer les appareils
+      const importCount = importAppliances(appliancesToImport as Appliance[]);
+      
+      setImportedCount(importCount);
+      setDuplicateCount(duplicates);
+      
+      toast("Importation réussie", {
+        description: `${importCount} appareils importés (${duplicates} doublons ignorés)`
       });
-      return;
-    }
-    
-    // Créer une nouvelle session
-    const newSession: ImportSession = {
-      id: `session_${Date.now()}`,
-      name: sessionName,
-      partReference,
-      appliances: importedAppliances || [],
-      incompleteAppliances: incompleteAppliances,
-      createdAt: new Date().toISOString()
-    };
-    
-    // Sauvegarder la session
-    saveImportSession(newSession.id, newSession);
-    
-    toast({
-      title: "Session sauvegardée",
-      description: `La session "${sessionName}" a été sauvegardée et pourra être reprise ultérieurement.`
-    });
-    
-    // Mettre à jour la liste des sessions
-    const sessionsData = localStorage.getItem("importSessions");
-    if (sessionsData) {
-      try {
-        const sessions = JSON.parse(sessionsData);
-        setSavedSessions(Object.values(sessions));
-      } catch (e) {
-        console.error("Erreur lors du chargement des sessions:", e);
+      
+      // Nettoyer la session d'importation
+      if (importSessionId) {
+        deleteImportSession(importSessionId);
       }
+      
+      setImportStep("complete");
+    } catch (error) {
+      console.error("Import error:", error);
+      toast("Erreur", {
+        description: "Une erreur est survenue lors de l'importation",
+        variant: "destructive"
+      });
     }
-    
-    setShowSaveSessionDialog(false);
   };
   
-  const handleLoadSession = (session: ImportSession) => {
-    setCurrentSession(session);
-    
-    // Restaurer les données de la session
-    if (session.partReference) {
-      setPartReference(session.partReference);
-    }
-    
-    if (session.appliances && session.appliances.length > 0) {
-      setImportedAppliances(session.appliances);
-      setShowExportOption(true);
-    }
-    
-    if (session.incompleteAppliances && session.incompleteAppliances.length > 0) {
-      setIncompleteAppliances(session.incompleteAppliances);
-    }
-    
-    setShowSessionsDialog(false);
-    
-    toast({
-      title: "Session chargée",
-      description: `La session "${session.name || session.id}" a été restaurée.`
-    });
+  const resetImport = () => {
+    setFile(null);
+    setProcessedData([]);
+    setPreviewData([]);
+    setImportedCount(0);
+    setDuplicateCount(0);
+    setImportSessionId("");
+    setPartReference("");
+    setIncompleteTotalCount(0);
+    setCurrentIncompleteIndex(0);
+    setProcessedCount(0);
+    setIdentifiedAppliances({});
+    setImportStep("upload");
   };
-  
-  const handleDeleteSession = (sessionId: string, sessionName: string | undefined) => {
-    deleteImportSession(sessionId);
-    
-    // Mettre à jour la liste des sessions
-    const sessionsData = localStorage.getItem("importSessions");
-    if (sessionsData) {
-      try {
-        const sessions = JSON.parse(sessionsData);
-        setSavedSessions(Object.values(sessions));
-      } catch (e) {
-        console.error("Erreur lors du chargement des sessions:", e);
-      }
+
+  // Mettre à jour l'aperçu quand le nombre de lignes change
+  useEffect(() => {
+    if (processedData.length > 0) {
+      setPreviewData(processedData.slice(0, selectedPreviewRows));
     }
-    
-    toast({
-      title: "Session supprimée",
-      description: `La session "${sessionName || sessionId}" a été supprimée.`
-    });
-  };
+  }, [selectedPreviewRows, processedData]);
 
   return (
     <div className="flex flex-col min-h-screen">
       <Navigation />
       
       <main className="flex-1 container mx-auto py-8 px-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
-          <h1 className="text-3xl font-bold flex items-center">
-            <ImportIcon className="mr-2 h-6 w-6" />
-            Importer des appareils
-          </h1>
-          
-          <div className="flex gap-2">
-            <Button 
-              variant="outline" 
-              onClick={() => setShowSessionsDialog(true)}
-              className="flex items-center gap-1"
-            >
-              <Clock className="h-4 w-4" />
-              Sessions sauvegardées
-            </Button>
-            
-            {(importedAppliances?.length > 0 || incompleteAppliances.length > 0) && (
-              <Button
-                variant="outline"
-                onClick={() => setShowSaveSessionDialog(true)}
-                className="flex items-center gap-1"
-              >
-                <Save className="h-4 w-4" />
-                Sauvegarder la session
-              </Button>
-            )}
-          </div>
-        </div>
+        <h1 className="text-3xl font-bold mb-6 flex items-center">
+          <FileUp className="mr-2 h-6 w-6" />
+          Importer des appareils
+        </h1>
         
         <div className="mb-6">
-          <div className="grid w-full items-center gap-1.5">
-            <Label htmlFor="partReference">Référence de la pièce (Optionnel pour format 4 colonnes, Obligatoire pour format 2 colonnes)</Label>
-            {knownPartReferences.length > 0 ? (
-              <div className="flex gap-2">
-                <Select value={partReference} onValueChange={handleSelectPartReference}>
-                  <SelectTrigger className="w-full max-w-sm">
-                    <SelectValue placeholder="Sélectionner ou saisir une référence" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {knownPartReferences.map(ref => (
-                      <SelectItem key={ref} value={ref}>{ref}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Input 
-                  placeholder="Ou saisir une nouvelle référence" 
-                  value={partReference} 
-                  onChange={e => setPartReference(e.target.value)} 
-                  className="w-full max-w-sm" 
-                />
-              </div>
-            ) : (
-              <Input 
-                id="partReference" 
-                type="text" 
-                value={partReference} 
-                onChange={e => setPartReference(e.target.value)} 
-                placeholder="Ex: XYZ123" 
-                className="w-full max-w-sm" 
-              />
-            )}
-            <p className="text-sm text-gray-500">
-              Cette référence sera associée aux appareils importés pour la génération de fichiers de compatibilité.
-            </p>
-          </div>
+          <Tabs value={importStep} onValueChange={(v) => setImportStep(v as any)} className="w-full">
+            <TabsList className="grid grid-cols-4 w-full">
+              <TabsTrigger value="upload" disabled={importStep !== "upload"}>1. Télécharger un fichier</TabsTrigger>
+              <TabsTrigger value="missingInfo" disabled={importStep !== "missingInfo" && importStep !== "preview" && importStep !== "complete"}>2. Compléter les données</TabsTrigger>
+              <TabsTrigger value="preview" disabled={importStep !== "preview" && importStep !== "complete"}>3. Aperçu</TabsTrigger>
+              <TabsTrigger value="complete" disabled={importStep !== "complete"}>4. Terminé</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="upload" className="py-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Sélectionner un fichier à importer</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div 
+                    {...getRootProps()} 
+                    className={`border-2 border-dashed rounded-md p-10 text-center cursor-pointer transition-colors ${
+                      isDragActive ? "border-primary bg-primary/5" : "border-gray-300 hover:border-primary"
+                    }`}
+                  >
+                    <input {...getInputProps()} />
+                    {file ? (
+                      <div className="space-y-2">
+                        <Check className="mx-auto h-10 w-10 text-green-500" />
+                        <p className="text-lg font-medium">{file.name}</p>
+                        <p className="text-sm text-gray-500">
+                          {file.size > 1024 * 1024 
+                            ? `${(file.size / (1024 * 1024)).toFixed(2)} MB`
+                            : `${(file.size / 1024).toFixed(2)} KB`
+                          }
+                        </p>
+                      </div>
+                    ) : isDragActive ? (
+                      <div className="space-y-2">
+                        <FileUp className="mx-auto h-10 w-10 text-primary animate-bounce" />
+                        <p className="text-lg font-medium">Déposez le fichier ici...</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <FileUp className="mx-auto h-10 w-10 text-gray-400" />
+                        <p className="text-lg font-medium">
+                          Glissez-déposez un fichier ici, ou cliquez pour sélectionner
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          Formats supportés : CSV, Excel, TXT
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="partReference">Référence de pièce (optionnel)</Label>
+                      <div className="flex gap-2">
+                        {knownPartReferences.length > 0 ? (
+                          <Select value={partReference} onValueChange={setPartReference}>
+                            <SelectTrigger className="flex-1">
+                              <SelectValue placeholder="Associer à une référence de pièce" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {knownPartReferences.map(ref => (
+                                <SelectItem key={ref} value={ref}>{ref}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <Input 
+                            id="partReference"
+                            placeholder="Ex: XYZ123"
+                            value={partReference}
+                            onChange={e => setPartReference(e.target.value)}
+                          />
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-500">
+                        Si spécifié, tous les appareils importés seront associés à cette référence de pièce
+                      </p>
+                    </div>
+                    
+                    <ImportForm />
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+            
+            <TabsContent value="missingInfo" className="py-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center justify-between">
+                    <span>Compléter les informations manquantes</span>
+                    <div className="text-sm font-normal text-muted-foreground">
+                      {processedCount} / {incompleteTotalCount}
+                    </div>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <Progress value={(processedCount / incompleteTotalCount) * 100} />
+                  
+                  {processedData[currentIncompleteIndex] && (
+                    <MissingInfoForm
+                      row={processedData[currentIncompleteIndex]}
+                      knownBrands={[]}
+                      knownTypes={[]}
+                      onSave={handleMissingInfoUpdate}
+                      // suggestBrand={suggestBrand}
+                      // suggestType={suggestType}
+                    />
+                  )}
+                  
+                  <div className="flex justify-end">
+                    <Button onClick={handleCompleteImport} variant="outline">
+                      Ignorer le reste et passer à l'aperçu
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+            
+            <TabsContent value="preview" className="py-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center justify-between">
+                    <span>Aperçu des données à importer</span>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-sm font-normal text-muted-foreground">
+                        Lignes affichées:
+                      </span>
+                      <Select 
+                        value={selectedPreviewRows.toString()}
+                        onValueChange={(value) => setSelectedPreviewRows(Number(value))}
+                      >
+                        <SelectTrigger className="w-20">
+                          <SelectValue placeholder="10" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="10">10</SelectItem>
+                          <SelectItem value="25">25</SelectItem>
+                          <SelectItem value="50">50</SelectItem>
+                          <SelectItem value="100">100</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="rounded-md border overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-[100px]">État</TableHead>
+                          <TableHead>Référence</TableHead>
+                          <TableHead>Référence commerciale</TableHead>
+                          <TableHead>Marque</TableHead>
+                          <TableHead>Type</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {previewData.length > 0 ? (
+                          previewData.map((row, index) => {
+                            const isComplete = row.brand && row.type;
+                            const isDuplicate = allAppliances.some(app => app.reference === row.reference);
+                            const rowIndex = processedData.indexOf(row);
+                            
+                            return (
+                              <TableRow key={index}>
+                                <TableCell>
+                                  {isDuplicate ? (
+                                    <Badge variant="outline" className="bg-amber-50 text-amber-600 border-amber-200">
+                                      Déjà existant
+                                    </Badge>
+                                  ) : isComplete ? (
+                                    <Badge variant="outline" className="bg-green-50 text-green-600 border-green-200">
+                                      Prêt
+                                    </Badge>
+                                  ) : (
+                                    <Badge variant="outline" className="bg-red-50 text-red-600 border-red-200">
+                                      Incomplet
+                                    </Badge>
+                                  )}
+                                </TableCell>
+                                <TableCell className="font-medium">{row.reference || "-"}</TableCell>
+                                <TableCell>{row.commercialRef || "-"}</TableCell>
+                                <TableCell>{row.brand || "-"}</TableCell>
+                                <TableCell>{row.type || "-"}</TableCell>
+                              </TableRow>
+                            );
+                          })
+                        ) : (
+                          <TableRow>
+                            <TableCell colSpan={5} className="h-24 text-center">
+                              Aucune donnée à afficher
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                  
+                  <div className="flex justify-between items-center mt-6">
+                    <div>
+                      <p className="text-sm text-gray-500">
+                        {processedData.length} lignes au total
+                        {processedData.filter(row => allAppliances.some(app => app.reference === row.reference)).length > 0 && (
+                          <> • {processedData.filter(row => allAppliances.some(app => app.reference === row.reference)).length} doublons</>
+                        )}
+                        {processedData.filter(row => !row.brand || !row.type).length > 0 && (
+                          <> • {processedData.filter(row => !row.brand || !row.type).length} incomplets</>
+                        )}
+                      </p>
+                    </div>
+                    <div className="flex space-x-2">
+                      <Button variant="outline" onClick={resetImport}>Annuler</Button>
+                      <Button onClick={handleImport}>
+                        <ImportIcon className="mr-2 h-4 w-4" />
+                        Importer
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+            
+            <TabsContent value="complete" className="py-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Importation terminée</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="flex items-center justify-center py-8">
+                    <div className="text-center">
+                      <Check className="mx-auto h-16 w-16 text-green-500 mb-4" />
+                      <h2 className="text-2xl font-bold mb-2">
+                        Importation réussie !
+                      </h2>
+                      <p className="text-gray-500 mb-4">
+                        {importedCount} appareils ont été importés dans la base de données.
+                        {duplicateCount > 0 && (
+                          <> {duplicateCount} doublons ont été ignorés.</>
+                        )}
+                      </p>
+                      <div className="flex flex-col sm:flex-row gap-2 justify-center">
+                        <Button onClick={resetImport} variant="outline">
+                          Nouvelle importation
+                        </Button>
+                        <Button onClick={() => window.location.href = "/appliances"}>
+                          Voir tous les appareils
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
         </div>
-        
-        <ImportForm 
-          onImport={handleImport} 
-          knownBrands={knownBrands} 
-          knownTypes={knownTypes} 
-        />
-
-        {showExportOption && importedAppliances && importedAppliances.length > 0 && (
-          <Card className="mt-6">
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <FileText className="mr-2 h-5 w-5" />
-                Exporter les données compatibles
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="mb-4">
-                Les appareils ont été importés et associés à la référence de pièce {partReference}.
-                Vous pouvez maintenant exporter ces données au format CSV pour votre liste de compatibilité.
-              </p>
-              <div className="flex space-x-4">
-                <Button onClick={handleExportImported}>
-                  Exporter en CSV ({importedAppliances.length} appareils)
-                </Button>
-                <Button variant="outline" asChild>
-                  <Link to="/export">
-                    Options d'export avancées
-                  </Link>
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-        
-        {currentSession && (
-          <Card className="mt-6">
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <Edit className="mr-2 h-5 w-5" />
-                Session en cours: {currentSession.name || currentSession.id}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-sm text-gray-500 mb-4">
-                <p>Date de création: {new Date(currentSession.createdAt).toLocaleString()}</p>
-                {currentSession.partReference && (
-                  <p>Référence de pièce: {currentSession.partReference}</p>
-                )}
-              </div>
-              
-              <Tabs defaultValue="imported">
-                <TabsList>
-                  <TabsTrigger value="imported">
-                    Appareils importés ({currentSession.appliances?.length || 0})
-                  </TabsTrigger>
-                  <TabsTrigger value="incomplete">
-                    Données incomplètes ({currentSession.incompleteAppliances?.length || 0})
-                  </TabsTrigger>
-                </TabsList>
-                
-                <TabsContent value="imported">
-                  <div className="rounded-md border max-h-64 overflow-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Référence</TableHead>
-                          <TableHead>Référence commerciale</TableHead>
-                          <TableHead>Marque</TableHead>
-                          <TableHead>Type</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {currentSession.appliances?.map((app, index) => (
-                          <TableRow key={app.id || index}>
-                            <TableCell>{app.reference}</TableCell>
-                            <TableCell>{app.commercialRef}</TableCell>
-                            <TableCell>{app.brand}</TableCell>
-                            <TableCell>{app.type}</TableCell>
-                          </TableRow>
-                        ))}
-                        {(!currentSession.appliances || currentSession.appliances.length === 0) && (
-                          <TableRow>
-                            <TableCell colSpan={4} className="text-center">Aucun appareil importé</TableCell>
-                          </TableRow>
-                        )}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </TabsContent>
-                
-                <TabsContent value="incomplete">
-                  <div className="rounded-md border max-h-64 overflow-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Référence</TableHead>
-                          <TableHead>Référence commerciale</TableHead>
-                          <TableHead>Marque</TableHead>
-                          <TableHead>Type</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {currentSession.incompleteAppliances?.map((app, index) => (
-                          <TableRow key={app.id || index}>
-                            <TableCell>{app.reference}</TableCell>
-                            <TableCell>{app.commercialRef}</TableCell>
-                            <TableCell>{app.brand || "Manquant"}</TableCell>
-                            <TableCell>{app.type || "Manquant"}</TableCell>
-                          </TableRow>
-                        ))}
-                        {(!currentSession.incompleteAppliances || currentSession.incompleteAppliances.length === 0) && (
-                          <TableRow>
-                            <TableCell colSpan={4} className="text-center">Aucun appareil avec données incomplètes</TableCell>
-                          </TableRow>
-                        )}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </TabsContent>
-              </Tabs>
-              
-              <div className="flex justify-end mt-4">
-                <Button 
-                  variant="outline" 
-                  onClick={() => setCurrentSession(null)}
-                >
-                  Fermer
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
       </main>
-      
-      <Dialog open={showReferenceDialog} onOpenChange={setShowReferenceDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Référence de pièce requise</DialogTitle>
-            <DialogDescription>
-              Vous importez des données au format 2 colonnes. Veuillez spécifier une référence de pièce pour ces appareils.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="partRefDialog" className="col-span-4">
-                Référence de la pièce
-              </Label>
-              <Input 
-                id="partRefDialog" 
-                value={partReference} 
-                onChange={e => setPartReference(e.target.value)} 
-                placeholder="Ex: XYZ123" 
-                className="col-span-4" 
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowReferenceDialog(false)}>Annuler</Button>
-            <Button onClick={confirmPartReference}>Confirmer</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      
-      <Dialog open={showExportDialog} onOpenChange={setShowExportDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Exportation disponible</DialogTitle>
-            <DialogDescription>
-              Les appareils ont été importés et associés à la référence de pièce <strong>{partReference}</strong>.
-              Voulez-vous exporter la liste de compatibilité maintenant?
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4">
-            <p className="text-sm text-gray-600">
-              {importedAppliances?.length || 0} appareils sont prêts à être exportés.
-            </p>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowExportDialog(false)}>Plus tard</Button>
-            <Button onClick={handleExportImported}>
-              Exporter ({importedAppliances?.length || 0} appareils)
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      
-      <Dialog open={showSaveSessionDialog} onOpenChange={setShowSaveSessionDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Sauvegarder la session</DialogTitle>
-            <DialogDescription>
-              Donnez un nom à cette session pour pouvoir la retrouver plus tard.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="sessionName" className="col-span-4">
-                Nom de la session
-              </Label>
-              <Input 
-                id="sessionName" 
-                value={sessionName} 
-                onChange={e => setSessionName(e.target.value)} 
-                placeholder="Ex: Import Mai 2025" 
-                className="col-span-4" 
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowSaveSessionDialog(false)}>Annuler</Button>
-            <Button onClick={handleSaveSession}>Sauvegarder</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      
-      <Dialog open={showSessionsDialog} onOpenChange={setShowSessionsDialog}>
-        <DialogContent className="max-w-4xl max-h-[80vh] overflow-auto">
-          <DialogHeader>
-            <DialogTitle>Sessions sauvegardées</DialogTitle>
-            <DialogDescription>
-              Reprenez une session d'importation précédente.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4">
-            {savedSessions.length > 0 ? (
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Nom</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Référence</TableHead>
-                      <TableHead>Appareils</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {savedSessions.map(session => (
-                      <TableRow key={session.id}>
-                        <TableCell className="font-medium">
-                          {session.name || "Sans nom"}
-                        </TableCell>
-                        <TableCell>
-                          {new Date(session.createdAt).toLocaleDateString()}
-                        </TableCell>
-                        <TableCell>
-                          {session.partReference || "—"}
-                        </TableCell>
-                        <TableCell>
-                          {session.appliances?.length || 0} importés, {session.incompleteAppliances?.length || 0} incomplets
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            <Button 
-                              size="sm" 
-                              onClick={() => handleLoadSession(session)}
-                            >
-                              Charger
-                            </Button>
-                            <Button 
-                              size="sm" 
-                              variant="outline"
-                              onClick={() => handleDeleteSession(session.id, session.name)}
-                            >
-                              Supprimer
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            ) : (
-              <div className="text-center py-8 text-gray-500">
-                <p>Aucune session sauvegardée</p>
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowSessionsDialog(false)}>Fermer</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
       
       <footer className="bg-gray-100 p-4 text-center text-gray-600">
         <p>© {new Date().getFullYear()} - Gestionnaire d'Appareils Électroménagers</p>

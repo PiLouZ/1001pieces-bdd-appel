@@ -8,7 +8,7 @@ import { useAppliances } from "@/hooks/useAppliances";
 import { Database, FileText, Filter, AlertCircle, Plus, Tag } from "lucide-react";
 import { Appliance, ApplianceSelection } from "@/types/appliance";
 import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
@@ -46,12 +46,12 @@ const Appliances: React.FC = () => {
     knownTypes,
     allAppliances,
     associateApplicancesToPartReference,
-    getPartReferencesForAppliance
+    getPartReferencesForAppliance,
+    cleanDatabase
   } = useAppliances();
   
   const [selectedAppliances, setSelectedAppliances] = useState<ApplianceSelection>({});
   const [showNeedingUpdate, setShowNeedingUpdate] = useState(false);
-  const { toast } = useToast();
   const [inconsistencies, setInconsistencies] = useState<Inconsistency[]>([]);
   const [showInconsistenciesDialog, setShowInconsistenciesDialog] = useState(false);
   const [currentInconsistencyIndex, setCurrentInconsistencyIndex] = useState(0);
@@ -61,12 +61,34 @@ const Appliances: React.FC = () => {
   const [showAddPartDialog, setShowAddPartDialog] = useState(false);
   const [newPartReference, setNewPartReference] = useState("");
   const [selectedPartReference, setSelectedPartReference] = useState("");
+  
+  // État pour suivre le nombre de doublons
+  const [duplicatesCount, setDuplicatesCount] = useState(0);
 
   const displayedAppliances = showNeedingUpdate ? appliancesNeedingUpdate : appliances;
   const selectedCount = Object.values(selectedAppliances).filter(Boolean).length;
   const selectedIds = Object.entries(selectedAppliances)
     .filter(([_, selected]) => selected)
     .map(([id]) => id);
+  
+  // Fonction pour détecter les doublons
+  useEffect(() => {
+    if (allAppliances.length > 0) {
+      // Utiliser un Set pour identifier les références uniques
+      const references = new Set<string>();
+      const duplicates = new Set<string>();
+      
+      allAppliances.forEach(appliance => {
+        if (references.has(appliance.reference)) {
+          duplicates.add(appliance.reference);
+        } else {
+          references.add(appliance.reference);
+        }
+      });
+      
+      setDuplicatesCount(duplicates.size);
+    }
+  }, [allAppliances]);
   
   // Fonction pour détecter les incohérences
   useEffect(() => {
@@ -127,8 +149,7 @@ const Appliances: React.FC = () => {
       setCurrentInconsistencyIndex(0);
       setShowInconsistenciesDialog(true);
     } else {
-      toast({
-        title: "Base de données cohérente",
+      toast("Base de données cohérente", {
         description: "Aucune incohérence n'a été détectée dans la base de données.",
       });
     }
@@ -144,8 +165,7 @@ const Appliances: React.FC = () => {
     const selectedAppliance = appliances.find(app => app.id === selectedId);
     
     if (!selectedAppliance) {
-      toast({
-        title: "Erreur",
+      toast("Erreur", {
         description: "Veuillez sélectionner une option à conserver.",
         variant: "destructive",
       });
@@ -165,8 +185,7 @@ const Appliances: React.FC = () => {
       updateMultipleAppliances(applianceIdsToUpdate, { type: selectedAppliance.type });
     }
     
-    toast({
-      title: "Incohérence résolue",
+    toast("Incohérence résolue", {
       description: `Les appareils avec la référence ${reference} ont été mis à jour.`,
     });
     
@@ -193,8 +212,7 @@ const Appliances: React.FC = () => {
     const selectedAppliance = appliances.find(app => app.id === selectedId);
     
     if (!selectedAppliance) {
-      toast({
-        title: "Erreur",
+      toast("Erreur", {
         description: "Veuillez sélectionner une option à conserver.",
         variant: "destructive",
       });
@@ -209,8 +227,7 @@ const Appliances: React.FC = () => {
     // Supprimer les appareils en double
     applianceIdsToDelete.forEach(id => deleteAppliance(id));
     
-    toast({
-      title: "Fusion effectuée",
+    toast("Fusion effectuée", {
       description: `Les doublons avec la référence ${reference} ont été supprimés.`,
     });
     
@@ -254,8 +271,7 @@ const Appliances: React.FC = () => {
   
   const handleBulkUpdate = (field: keyof Omit<Partial<Appliance>, "id">, value: string) => {
     if (selectedIds.length === 0) {
-      toast({
-        title: "Aucun appareil sélectionné",
+      toast("Aucun appareil sélectionné", {
         description: "Veuillez sélectionner au moins un appareil à modifier.",
         variant: "destructive",
       });
@@ -264,8 +280,7 @@ const Appliances: React.FC = () => {
     
     const updateCount = updateMultipleAppliances(selectedIds, { [field]: value });
     
-    toast({
-      title: "Mise à jour effectuée",
+    toast("Mise à jour effectuée", {
       description: `${updateCount} appareils ont été mis à jour.`,
     });
     
@@ -279,8 +294,7 @@ const Appliances: React.FC = () => {
   
   const handleOpenAddPartDialog = () => {
     if (selectedIds.length === 0) {
-      toast({
-        title: "Aucun appareil sélectionné",
+      toast("Aucun appareil sélectionné", {
         description: "Veuillez sélectionner au moins un appareil pour associer une référence de pièce.",
         variant: "destructive"
       });
@@ -293,8 +307,7 @@ const Appliances: React.FC = () => {
     const partRef = selectedPartReference || newPartReference;
     
     if (!partRef.trim()) {
-      toast({
-        title: "Erreur",
+      toast("Erreur", {
         description: "Veuillez spécifier une référence de pièce",
         variant: "destructive"
       });
@@ -302,8 +315,7 @@ const Appliances: React.FC = () => {
     }
     
     if (selectedIds.length === 0) {
-      toast({
-        title: "Aucun appareil sélectionné",
+      toast("Aucun appareil sélectionné", {
         description: "Veuillez sélectionner au moins un appareil",
         variant: "destructive"
       });
@@ -312,14 +324,29 @@ const Appliances: React.FC = () => {
     
     const count = associateApplicancesToPartReference(selectedIds, partRef);
     
-    toast({
-      title: "Association réussie",
+    toast("Association réussie", {
       description: `${count} appareils ont été associés à la référence de pièce ${partRef}`
     });
     
     setShowAddPartDialog(false);
     setNewPartReference("");
     setSelectedPartReference("");
+  };
+  
+  const handleCleanDuplicates = () => {
+    const removedCount = cleanDatabase();
+    
+    if (removedCount > 0) {
+      toast("Nettoyage terminé", {
+        description: `${removedCount} doublons ont été supprimés.`
+      });
+      // Mettre à jour le compteur
+      setDuplicatesCount(0);
+    } else {
+      toast("Information", {
+        description: "Aucun doublon trouvé dans la base de données."
+      });
+    }
   };
 
   return (
@@ -372,6 +399,21 @@ const Appliances: React.FC = () => {
                 </Badge>
               )}
             </Button>
+            
+            {duplicatesCount > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleCleanDuplicates}
+                className="flex items-center gap-1"
+              >
+                <FileText className="h-4 w-4" />
+                Supprimer les doublons
+                <Badge variant="destructive" className="ml-1">
+                  {duplicatesCount}
+                </Badge>
+              </Button>
+            )}
             
             {selectedCount > 0 && (
               <Button

@@ -1,184 +1,99 @@
 
 import React, { useState, useEffect } from "react";
-import Navigation from "@/components/Navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import Navigation from "@/components/Navigation";
 import { useAppliances } from "@/hooks/useAppliances";
+import { downloadCSV, exportAppliances } from "@/utils/exportUtils";
+import { FileDown, Database, FileText } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { downloadFile, generateCSV, generateHTML } from "@/utils/exportUtils";
-import { Checkbox } from "@/components/ui/checkbox";
-import { ExportOptions } from "@/types/appliance";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsContent, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 const Export: React.FC = () => {
-  const { allAppliances, cleanDatabase, getAppliancesByPartReference, knownPartReferences: appPartRefs } = useAppliances();
-  const [partReference, setPartReference] = useState("");
-  const [exportFormat, setExportFormat] = useState<"csv" | "html">("csv");
+  const { 
+    appliances: allAppliances, 
+    knownPartReferences,
+    getAppliancesByPartReference
+  } = useAppliances();
+  
+  const [selectedFormat, setSelectedFormat] = useState<"csv" | "json">("csv");
   const [includeHeader, setIncludeHeader] = useState(true);
-  const [lastImportedPartRef, setLastImportedPartRef] = useState("");
-  const [knownPartReferences, setKnownPartReferences] = useState<string[]>([]);
-  const [appliancesCount, setAppliancesCount] = useState(0);
+  const [selectedPartReference, setSelectedPartReference] = useState("");
+  const [exportType, setExportType] = useState<"all" | "by-part-reference">("all");
 
-  useEffect(() => {
-    // Récupérer la dernière session d'importation
-    const lastSessionStr = localStorage.getItem("lastImportSession");
-    if (lastSessionStr) {
-      try {
-        const lastSession = JSON.parse(lastSessionStr);
-        setLastImportedPartRef(lastSession.partReference || "");
-        setPartReference(lastSession.partReference || "");
-        
-        // Mettre à jour le compte d'appareils
-        if (lastSession.partReference) {
-          const compatibleAppliances = getAppliancesByPartReference(lastSession.partReference);
-          setAppliancesCount(compatibleAppliances.length);
-        }
-      } catch (e) {
-        console.error("Erreur lors de la récupération de la dernière session:", e);
-      }
-    }
-
-    // Récupérer toutes les références de pièces connues
-    setKnownPartReferences(appPartRefs);
-  }, [appPartRefs, getAppliancesByPartReference]);
-
-  // Mettre à jour le nombre d'appareils quand la référence de pièce change
-  useEffect(() => {
-    if (partReference.trim()) {
-      const compatibleAppliances = getAppliancesByPartReference(partReference);
-      setAppliancesCount(compatibleAppliances.length);
-    } else {
-      setAppliancesCount(0);
-    }
-  }, [partReference, getAppliancesByPartReference]);
-
-  const handlePartReferenceChange = (ref: string) => {
-    setPartReference(ref);
-    if (ref.trim()) {
-      const compatibleAppliances = getAppliancesByPartReference(ref);
-      setAppliancesCount(compatibleAppliances.length);
-    } else {
-      setAppliancesCount(0);
-    }
-  };
-
-  const handleExportAll = () => {
+  const handleExport = () => {
     try {
-      const options: ExportOptions = { 
-        partReference: "TOUS",
-        format: exportFormat,
-        includeHeader
-      };
+      if (exportType === "by-part-reference" && !selectedPartReference) {
+        toast("Erreur", {
+          description: "Veuillez sélectionner une référence de pièce",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      let appliancesToExport = allAppliances;
+      let fileName = `export-appareils-${new Date().toISOString().split('T')[0]}`;
       
-      if (exportFormat === "csv") {
-        const csvContent = generateCSV(allAppliances, options);
+      if (exportType === "by-part-reference" && selectedPartReference) {
+        appliancesToExport = getAppliancesByPartReference(selectedPartReference);
+        fileName = `export-appareils-compatibles-${selectedPartReference}-${new Date().toISOString().split('T')[0]}`;
         
-        downloadFile(
-          csvContent,
-          `tous_appareils.csv`,
-          "text/csv;charset=utf-8"
-        );
-      } else {
-        const htmlContent = generateHTML(allAppliances, options);
+        if (appliancesToExport.length === 0) {
+          toast("Information", {
+            description: "Aucun appareil n'est compatible avec cette référence de pièce"
+          });
+          return;
+        }
+      }
+      
+      if (appliancesToExport.length === 0) {
+        toast("Information", {
+          description: "Aucun appareil à exporter"
+        });
+        return;
+      }
+      
+      if (selectedFormat === "csv") {
+        const csvContent = exportAppliances(appliancesToExport, { 
+          format: "csv",
+          includeHeader: includeHeader,
+          partReference: exportType === "by-part-reference" ? selectedPartReference : undefined
+        });
+        downloadCSV(csvContent, fileName);
         
-        downloadFile(
-          htmlContent,
-          `tous_appareils.html`,
-          "text/html;charset=utf-8"
-        );
-      }
-
-      toast({
-        title: "Exportation réussie",
-        description: `Le fichier ${exportFormat.toUpperCase()} de tous les appareils a été généré avec succès.`,
-      });
-    } catch (error) {
-      toast({
-        title: "Erreur",
-        description: `Impossible de générer le fichier: ${(error as Error).message}`,
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleExportByReference = () => {
-    if (!partReference.trim()) {
-      toast({
-        title: "Erreur",
-        description: "Veuillez spécifier une référence de pièce",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const appliancesForPart = getAppliancesByPartReference(partReference);
-    
-    if (!appliancesForPart || appliancesForPart.length === 0) {
-      toast({
-        title: "Information",
-        description: "Aucun appareil trouvé pour cette référence de pièce",
-      });
-      return;
-    }
-
-    const options: ExportOptions = {
-      partReference,
-      format: exportFormat,
-      includeHeader,
-    };
-
-    try {
-      if (exportFormat === "csv") {
-        const csvContent = generateCSV(appliancesForPart, options);
-        downloadFile(
-          csvContent,
-          `appareils-compatibles-${partReference.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.csv`,
-          "text/csv;charset=utf-8"
-        );
+        toast("Exportation réussie", {
+          description: `${appliancesToExport.length} appareils ont été exportés au format CSV`
+        });
       } else {
-        const htmlContent = generateHTML(appliancesForPart, options);
-        downloadFile(
-          htmlContent,
-          `appareils-compatibles-${partReference.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.html`,
-          "text/html;charset=utf-8"
-        );
+        const jsonContent = exportAppliances(appliancesToExport, { 
+          format: "json",
+          partReference: exportType === "by-part-reference" ? selectedPartReference : undefined
+        });
+        
+        const blob = new Blob([jsonContent], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `${fileName}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        
+        toast("Exportation réussie", {
+          description: `${appliancesToExport.length} appareils ont été exportés au format JSON`
+        });
       }
-
-      toast({
-        title: "Exportation réussie",
-        description: `Le fichier ${exportFormat.toUpperCase()} a été généré avec succès pour ${appliancesForPart.length} appareils.`,
-      });
     } catch (error) {
-      toast({
-        title: "Erreur",
-        description: `Impossible de générer le fichier: ${(error as Error).message}`,
-        variant: "destructive",
+      toast("Erreur d'exportation", {
+        description: "Une erreur est survenue lors de l'exportation",
+        variant: "destructive"
       });
-    }
-  };
-
-  const handleCleanDatabase = () => {
-    const removedCount = cleanDatabase();
-    
-    if (removedCount > 0) {
-      toast({
-        title: "Base de données nettoyée",
-        description: `${removedCount} doublons ont été supprimés.`,
-      });
-    } else {
-      toast({
-        title: "Information",
-        description: "Aucun doublon trouvé dans la base de données.",
-      });
+      console.error("Export error:", error);
     }
   };
 
@@ -187,174 +102,129 @@ const Export: React.FC = () => {
       <Navigation />
       
       <main className="flex-1 container mx-auto py-8 px-4">
-        <h1 className="text-3xl font-bold mb-6">Exporter des données</h1>
+        <h1 className="text-3xl font-bold mb-6 flex items-center">
+          <FileDown className="mr-2 h-6 w-6" />
+          Exporter les données
+        </h1>
         
-        <Tabs defaultValue="reference" className="mt-6">
-          <TabsList className="w-full border-b mb-8">
-            <TabsTrigger value="reference">Par référence de pièce</TabsTrigger>
-            <TabsTrigger value="all">Tous les appareils</TabsTrigger>
-            <TabsTrigger value="maintenance">Maintenance</TabsTrigger>
-          </TabsList>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Paramètres d'exportation</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div>
+                <h3 className="text-lg font-medium mb-2">Type d'exportation</h3>
+                <RadioGroup 
+                  defaultValue="all" 
+                  value={exportType} 
+                  onValueChange={(value) => setExportType(value as "all" | "by-part-reference")}
+                  className="space-y-2"
+                >
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="all" id="all" />
+                    <Label htmlFor="all">Tous les appareils ({allAppliances.length})</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="by-part-reference" id="by-part-reference" />
+                    <Label htmlFor="by-part-reference">Par référence de pièce</Label>
+                  </div>
+                </RadioGroup>
+                
+                {exportType === "by-part-reference" && (
+                  <div className="mt-4 pl-6">
+                    <Label htmlFor="part-reference">Référence de la pièce</Label>
+                    <Select 
+                      value={selectedPartReference} 
+                      onValueChange={setSelectedPartReference}
+                    >
+                      <SelectTrigger className="mt-2">
+                        <SelectValue placeholder="Sélectionner une référence de pièce" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {knownPartReferences.map(ref => (
+                          <SelectItem key={ref} value={ref}>{ref}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
+              
+              <div>
+                <h3 className="text-lg font-medium mb-2">Format</h3>
+                <Tabs defaultValue="csv" value={selectedFormat} onValueChange={(value) => setSelectedFormat(value as "csv" | "json")}>
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="csv">CSV (Excel)</TabsTrigger>
+                    <TabsTrigger value="json">JSON</TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="csv" className="pt-4">
+                    <div className="flex items-center space-x-2">
+                      <Switch 
+                        id="include-header" 
+                        checked={includeHeader} 
+                        onCheckedChange={setIncludeHeader} 
+                      />
+                      <Label htmlFor="include-header">Inclure en-tête des colonnes</Label>
+                    </div>
+                    <p className="text-sm text-gray-500 mt-2">
+                      Format CSV compatible avec Excel et autres tableurs.
+                    </p>
+                  </TabsContent>
+                  <TabsContent value="json" className="pt-4">
+                    <p className="text-sm text-gray-500">
+                      Format JSON pour intégration avec d'autres applications.
+                    </p>
+                  </TabsContent>
+                </Tabs>
+              </div>
+            </CardContent>
+          </Card>
           
-          <TabsContent value="reference" className="mt-0">
-            <Card>
-              <CardHeader>
-                <CardTitle>Exporter par référence de pièce</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="grid gap-1.5">
-                    <Label htmlFor="partReference">Référence de la pièce</Label>
-                    <div className="flex gap-2">
-                      <div className="flex-1">
-                        {knownPartReferences.length > 0 ? (
-                          <Select 
-                            value={partReference} 
-                            onValueChange={handlePartReferenceChange}
-                          >
-                            <SelectTrigger className="w-full">
-                              <SelectValue placeholder="Sélectionner une référence de pièce" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {knownPartReferences.map(ref => (
-                                <SelectItem key={ref} value={ref}>{ref}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        ) : (
-                          <Input 
-                            id="partReference" 
-                            type="text" 
-                            value={partReference} 
-                            onChange={e => handlePartReferenceChange(e.target.value)}
-                            placeholder="Ex: XYZ123" 
-                          />
-                        )}
-                      </div>
-                      
-                      {lastImportedPartRef && lastImportedPartRef !== partReference && (
-                        <Button 
-                          variant="outline" 
-                          onClick={() => handlePartReferenceChange(lastImportedPartRef)}
-                          className="whitespace-nowrap"
-                        >
-                          Utiliser dernière importée ({lastImportedPartRef})
-                        </Button>
+          <Card>
+            <CardHeader>
+              <CardTitle>Aperçu et téléchargement</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="bg-gray-50 p-4 rounded-md border h-56 overflow-auto">
+                {exportType === "all" ? (
+                  <div className="flex flex-col items-center justify-center h-full">
+                    <Database className="h-10 w-10 text-gray-400 mb-2" />
+                    <p className="text-center text-gray-500">
+                      {allAppliances.length === 0 ? (
+                        "Aucun appareil à exporter"
+                      ) : (
+                        `${allAppliances.length} appareils seront exportés`
                       )}
-                    </div>
+                    </p>
                   </div>
-                  
-                  <div className="grid gap-1.5">
-                    <Label htmlFor="exportFormat">Format d'export</Label>
-                    <Select
-                      value={exportFormat}
-                      onValueChange={(value: "csv" | "html") => setExportFormat(value)}
-                    >
-                      <SelectTrigger id="exportFormat">
-                        <SelectValue placeholder="Sélectionner un format" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="csv">CSV</SelectItem>
-                        <SelectItem value="html">HTML</SelectItem>
-                      </SelectContent>
-                    </Select>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full">
+                    <FileText className="h-10 w-10 text-gray-400 mb-2" />
+                    <p className="text-center text-gray-500">
+                      {!selectedPartReference ? (
+                        "Sélectionnez une référence de pièce"
+                      ) : (
+                        getAppliancesByPartReference(selectedPartReference).length === 0 ? (
+                          "Aucun appareil compatible avec cette référence"
+                        ) : (
+                          `${getAppliancesByPartReference(selectedPartReference).length} appareils compatibles seront exportés`
+                        )
+                      )}
+                    </p>
                   </div>
-                  
-                  {exportFormat === "csv" && (
-                    <div className="flex items-center space-x-2">
-                      <Checkbox
-                        id="includeHeader"
-                        checked={includeHeader}
-                        onCheckedChange={(checked) => 
-                          setIncludeHeader(checked === true)
-                        }
-                      />
-                      <Label htmlFor="includeHeader">
-                        Inclure l'en-tête
-                      </Label>
-                    </div>
-                  )}
-                  
-                  <Button 
-                    onClick={handleExportByReference} 
-                    disabled={!partReference.trim() || appliancesCount === 0}
-                  >
-                    Exporter les appareils compatibles ({appliancesCount})
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-          
-          <TabsContent value="all" className="mt-0">
-            <Card>
-              <CardHeader>
-                <CardTitle>Exporter tous les appareils</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="grid gap-1.5">
-                    <Label htmlFor="exportFormatAll">Format d'export</Label>
-                    <Select
-                      value={exportFormat}
-                      onValueChange={(value: "csv" | "html") => setExportFormat(value)}
-                    >
-                      <SelectTrigger id="exportFormatAll">
-                        <SelectValue placeholder="Sélectionner un format" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="csv">CSV</SelectItem>
-                        <SelectItem value="html">HTML</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  
-                  {exportFormat === "csv" && (
-                    <div className="flex items-center space-x-2">
-                      <Checkbox
-                        id="includeHeaderAll"
-                        checked={includeHeader}
-                        onCheckedChange={(checked) => 
-                          setIncludeHeader(checked === true)
-                        }
-                      />
-                      <Label htmlFor="includeHeaderAll">
-                        Inclure l'en-tête
-                      </Label>
-                    </div>
-                  )}
-                  
-                  <Button onClick={handleExportAll}>
-                    Exporter tous les appareils ({allAppliances.length})
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-          
-          <TabsContent value="maintenance" className="mt-0">
-            <Card>
-              <CardHeader>
-                <CardTitle>Maintenance de la base de données</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <p>
-                    Votre base de données contient actuellement {allAppliances.length} appareils.
-                    Vous pouvez nettoyer la base pour supprimer les doublons.
-                  </p>
-                  
-                  <Button 
-                    variant="outline" 
-                    onClick={handleCleanDatabase}
-                  >
-                    Nettoyer la base de données
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+                )}
+              </div>
+              
+              <div className="flex justify-end">
+                <Button onClick={handleExport} disabled={allAppliances.length === 0}>
+                  <FileDown className="mr-2 h-4 w-4" />
+                  Télécharger
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </main>
       
       <footer className="bg-gray-100 p-4 text-center text-gray-600">

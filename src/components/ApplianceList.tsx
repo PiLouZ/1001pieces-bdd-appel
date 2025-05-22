@@ -25,12 +25,22 @@ interface ApplianceListProps {
   appliances: Appliance[];
   onDelete?: (id: string) => void;
   onEdit?: (appliance: Appliance) => void;
+  onSelect?: (id: string, selected: boolean) => void;
+  selected?: ApplianceSelection;
+  onSelectAll?: (selected: boolean) => void;
+  onBulkUpdate?: (field: keyof Omit<Partial<Appliance>, "id">, value: string) => void;
+  getPartReferencesForAppliance?: (id: string) => string[];
 }
 
 const ApplianceList: React.FC<ApplianceListProps> = ({
   appliances,
   onDelete,
   onEdit,
+  onSelect,
+  selected = {},
+  onSelectAll,
+  onBulkUpdate,
+  getPartReferencesForAppliance
 }) => {
   const [selectedAppliances, setSelectedAppliances] = useState<ApplianceSelection>({});
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -42,7 +52,7 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
   const navigate = useNavigate();
   const { 
     associateApplicancesToPartReference, 
-    getPartReferencesForAppliance,
+    getPartReferencesForAppliance: getPartRefs,
     cleanDatabase,
     appliances: allAppliances
   } = useAppliances();
@@ -72,36 +82,47 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
     
     // Compter les références pour chaque appareil
     appliances.forEach(appliance => {
-      const partRefs = getPartReferencesForAppliance(appliance.id);
+      const partRefs = getPartReferencesForAppliance 
+        ? getPartReferencesForAppliance(appliance.id) 
+        : getPartRefs(appliance.id);
       refCounts[appliance.id] = partRefs.length;
     });
     
     setPartRefCounts(refCounts);
-  }, [appliances, getPartReferencesForAppliance]);
+  }, [appliances, getPartReferencesForAppliance, getPartRefs]);
 
   const getAppliancePartRefCount = (id: string) => {
     return partRefCounts[id] || 0;
   };
 
   const toggleApplianceSelection = (id: string) => {
-    setSelectedAppliances(prev => ({
-      ...prev,
-      [id]: !prev[id]
-    }));
+    if (onSelect) {
+      onSelect(id, !selected[id]);
+    } else {
+      setSelectedAppliances(prev => ({
+        ...prev,
+        [id]: !prev[id]
+      }));
+    }
   };
 
   const toggleAllApplianceSelection = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newState: ApplianceSelection = {};
-    if (e.target.checked) {
-      appliances.forEach(appliance => {
-        newState[appliance.id] = true;
-      });
+    if (onSelectAll) {
+      onSelectAll(e.target.checked);
+    } else {
+      const newState: ApplianceSelection = {};
+      if (e.target.checked) {
+        appliances.forEach(appliance => {
+          newState[appliance.id] = true;
+        });
+      }
+      setSelectedAppliances(newState);
     }
-    setSelectedAppliances(newState);
   };
 
   const countSelectedAppliances = () => {
-    return Object.values(selectedAppliances).filter(Boolean).length;
+    const selectionToUse = onSelect ? selected : selectedAppliances;
+    return Object.values(selectionToUse).filter(Boolean).length;
   };
 
   const handleEditAppliance = (appliance: Appliance) => {
@@ -112,8 +133,7 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
   const handleDeleteAppliance = (id: string) => {
     if (onDelete) {
       onDelete(id);
-      toast({ 
-        title: "Appareil supprimé",
+      toast("Appareil supprimé", {
         description: "L'appareil a été supprimé avec succès"
       });
     }
@@ -121,19 +141,18 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
 
   const handleAssociateWithPartRef = () => {
     if (!partReference.trim()) {
-      toast({
-        title: "Erreur",
+      toast("Erreur", {
         description: "Veuillez spécifier une référence de pièce",
         variant: "destructive"
       });
       return;
     }
 
-    const selectedIds = Object.keys(selectedAppliances).filter(id => selectedAppliances[id]);
+    const selectionToUse = onSelect ? selected : selectedAppliances;
+    const selectedIds = Object.keys(selectionToUse).filter(id => selectionToUse[id]);
     
     if (selectedIds.length === 0) {
-      toast({
-        title: "Erreur",
+      toast("Erreur", {
         description: "Veuillez sélectionner au moins un appareil",
         variant: "destructive"
       });
@@ -149,8 +168,7 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
     });
     setPartRefCounts(updatedRefCounts);
 
-    toast({
-      title: "Association réussie",
+    toast("Association réussie", {
       description: `${selectedIds.length} appareils ont été associés à la référence ${partReference}`
     });
 
@@ -159,11 +177,11 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
   };
 
   const handleDeleteSelected = () => {
-    const selectedIds = Object.keys(selectedAppliances).filter(id => selectedAppliances[id]);
+    const selectionToUse = onSelect ? selected : selectedAppliances;
+    const selectedIds = Object.keys(selectionToUse).filter(id => selectionToUse[id]);
     
     if (selectedIds.length === 0) {
-      toast({
-        title: "Information",
+      toast("Information", {
         description: "Aucun appareil sélectionné"
       });
       return;
@@ -173,7 +191,8 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
   };
   
   const confirmDeleteSelected = () => {
-    const selectedIds = Object.keys(selectedAppliances).filter(id => selectedAppliances[id]);
+    const selectionToUse = onSelect ? selected : selectedAppliances;
+    const selectedIds = Object.keys(selectionToUse).filter(id => selectionToUse[id]);
     
     if (selectedIds.length === 0) {
       return;
@@ -187,12 +206,16 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
       }
     });
     
-    toast({
-      title: "Suppression terminée",
+    toast("Suppression terminée", {
       description: `${count} appareils ont été supprimés avec succès`
     });
     
-    setSelectedAppliances({});
+    if (onSelect && onSelectAll) {
+      onSelectAll(false);
+    } else {
+      setSelectedAppliances({});
+    }
+    
     setShowDeleteConfirmDialog(false);
   };
   
@@ -200,15 +223,13 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
     const removedCount = cleanDatabase();
     
     if (removedCount > 0) {
-      toast({
-        title: "Nettoyage terminé",
+      toast("Nettoyage terminé", {
         description: `${removedCount} doublons ont été supprimés.`
       });
       // Mettre à jour le compteur
       setDuplicatesCount(0);
     } else {
-      toast({
-        title: "Information",
+      toast("Information", {
         description: "Aucun doublon trouvé dans la base de données."
       });
     }
@@ -252,9 +273,9 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
             <TableRow>
               <TableHead className="w-12">
                 <Checkbox
-                  onCheckedChange={(e: any) => toggleAllApplianceSelection(e)}
+                  onCheckedChange={toggleAllApplianceSelection}
                   checked={countSelectedAppliances() === appliances.length && appliances.length > 0}
-                  indeterminate={countSelectedAppliances() > 0 && countSelectedAppliances() < appliances.length}
+                  aria-label={countSelectedAppliances() > 0 && countSelectedAppliances() < appliances.length ? "Partiellement sélectionné" : "Sélectionner tous les appareils"}
                 />
               </TableHead>
               <TableHead>Référence</TableHead>
@@ -271,7 +292,7 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
                 <TableRow key={appliance.id}>
                   <TableCell>
                     <Checkbox
-                      checked={!!selectedAppliances[appliance.id]}
+                      checked={onSelect ? !!selected[appliance.id] : !!selectedAppliances[appliance.id]}
                       onCheckedChange={() => toggleApplianceSelection(appliance.id)}
                     />
                   </TableCell>
@@ -325,6 +346,8 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
               onEdit(updatedAppliance);
             }
           }}
+          knownBrands={[]}
+          knownTypes={[]}
         />
       )}
 
