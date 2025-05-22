@@ -47,6 +47,7 @@ interface ApplianceListProps {
   selected?: ApplianceSelection;
   onSelectAll?: (selected: boolean) => void;
   onBulkUpdate?: (field: "brand" | "type", value: string) => void;
+  getPartReferencesForAppliance?: (applianceId: string) => string[];
 }
 
 type SortField = "reference" | "commercialRef" | "brand" | "type";
