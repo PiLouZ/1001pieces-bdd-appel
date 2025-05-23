@@ -1,3 +1,4 @@
+
 // Import statements and types
 import React, { useState, useEffect } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -13,6 +14,17 @@ import {
   DropdownMenuItem, 
   DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import PartReferencesDialog from "./PartReferencesDialog";
 
 export interface ApplianceListProps {
   appliances: Appliance[];
@@ -47,10 +59,15 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
   knownTypes,
   getPartReferencesForAppliance
 }) => {
-  const [sortField, setSortField] = useState<keyof Appliance>("reference");
+  const [sortField, setSortField] = useState<keyof Appliance | "partRefsCount">("reference");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [isEditing, setIsEditing] = useState<{[key: string]: boolean}>({});
   const [editValues, setEditValues] = useState<{[key: string]: string}>({});
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [showDuplicatesConfirm, setShowDuplicatesConfirm] = useState(false);
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
+  const [showPartRefsDialog, setShowPartRefsDialog] = useState(false);
+  const [selectedApplianceForParts, setSelectedApplianceForParts] = useState<Appliance | null>(null);
   
   // Effet pour créer un ID unique pour chaque appareil s'il n'en a pas déjà un
   useEffect(() => {
@@ -62,7 +79,7 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
   }, [appliances]);
   
   // Gestion de tri
-  const handleSort = (field: keyof Appliance) => {
+  const handleSort = (field: keyof Appliance | "partRefsCount") => {
     if (sortField === field) {
       setSortDirection(sortDirection === "asc" ? "desc" : "asc");
     } else {
@@ -73,22 +90,43 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
   
   // Tri des appareils
   const sortedAppliances = [...appliances].sort((a, b) => {
-    const aValue = String(a[sortField] || "");
-    const bValue = String(b[sortField] || "");
-    
-    if (sortDirection === "asc") {
-      return aValue.localeCompare(bValue);
+    if (sortField === "partRefsCount") {
+      const aCount = getPartReferencesForAppliance?.(a.id)?.length || 0;
+      const bCount = getPartReferencesForAppliance?.(b.id)?.length || 0;
+      return sortDirection === "asc" ? aCount - bCount : bCount - aCount;
     } else {
-      return bValue.localeCompare(aValue);
+      const aValue = String(a[sortField as keyof Appliance] || "");
+      const bValue = String(b[sortField as keyof Appliance] || "");
+      
+      if (sortDirection === "asc") {
+        return aValue.localeCompare(bValue);
+      } else {
+        return bValue.localeCompare(aValue);
+      }
     }
   });
   
   // Gestion des suppressions
-  const handleDelete = (id: string) => {
+  const handleConfirmDelete = (id: string) => {
     onDelete(id);
     toast("Appareil supprimé", {
       description: "L'appareil a été supprimé avec succès"
     });
+    setDeleteConfirmId(null);
+  };
+
+  const handleDeleteClick = (id: string) => {
+    setDeleteConfirmId(id);
+  };
+  
+  const handleBulkDelete = () => {
+    onBulkDelete();
+    setBulkDeleteConfirm(false);
+  };
+
+  const handleDuplicatesClean = () => {
+    onShowDuplicates();
+    setShowDuplicatesConfirm(false);
   };
   
   // Edition inline
@@ -127,6 +165,11 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
     setEditValues(prev => ({ ...prev, [`${id}-${field}`]: value }));
   };
   
+  const handleOpenPartRefs = (appliance: Appliance) => {
+    setSelectedApplianceForParts(appliance);
+    setShowPartRefsDialog(true);
+  };
+  
   // Gestion des sélections
   const isAllSelected = appliances.length > 0 && Object.keys(selected).length === appliances.length && 
     Object.values(selected).every(Boolean);
@@ -155,7 +198,7 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={onBulkDelete}>
+                <DropdownMenuItem onClick={() => setBulkDeleteConfirm(true)}>
                   <Trash2 className="mr-2 h-4 w-4" /> Supprimer la sélection
                 </DropdownMenuItem>
                 {/* Autres actions groupées */}
@@ -176,7 +219,7 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
             variant="outline" 
             size="sm" 
             className="h-8"
-            onClick={onShowDuplicates}
+            onClick={() => setShowDuplicatesConfirm(true)}
           >
             Doublons {duplicatesCount > 0 && <span className="ml-1 rounded-full bg-red-500 px-2 py-1 text-xs text-white">{duplicatesCount}</span>}
           </Button>
@@ -231,15 +274,24 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
                 <ChevronDown className="inline-block ml-1 h-4 w-4" />
               )}
             </TableHead>
-            <TableHead>Date d'ajout</TableHead>
-            <TableHead>Pièces compatibles</TableHead>
+            <TableHead 
+              className="cursor-pointer"
+              onClick={() => handleSort("partRefsCount")}
+            >
+              Pièces compatibles
+              {sortField === "partRefsCount" && (
+                sortDirection === "asc" ? 
+                <ChevronUp className="inline-block ml-1 h-4 w-4" /> : 
+                <ChevronDown className="inline-block ml-1 h-4 w-4" />
+              )}
+            </TableHead>
             <TableHead className="w-[100px] text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {sortedAppliances.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={8} className="text-center">
+              <TableCell colSpan={7} className="text-center">
                 Aucun appareil trouvé
               </TableCell>
             </TableRow>
@@ -405,12 +457,14 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
                   )}
                 </TableCell>
                 <TableCell>
-                  {appliance.dateAdded ? new Date(appliance.dateAdded).toLocaleDateString() : "-"}
-                </TableCell>
-                <TableCell>
-                  {getPartReferencesForAppliance && appliance.id ? 
-                    (getPartReferencesForAppliance(appliance.id)?.length || 0) : 
-                    (appliance.partReferences?.length || 0)}
+                  <button 
+                    className="text-blue-600 hover:underline"
+                    onClick={() => handleOpenPartRefs(appliance)}
+                  >
+                    {getPartReferencesForAppliance && appliance.id ? 
+                      (getPartReferencesForAppliance(appliance.id)?.length || 0) : 
+                      (appliance.partReferences?.length || 0)}
+                  </button>
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end">
@@ -423,7 +477,7 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
                       <span className="sr-only">Modifier</span>
                     </Button>
                     <Button
-                      onClick={() => handleDelete(appliance.id)}
+                      onClick={() => handleDeleteClick(appliance.id)}
                       variant="ghost"
                       size="icon"
                     >
@@ -437,6 +491,74 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
           )}
         </TableBody>
       </Table>
+
+      {/* Confirmation de suppression d'une ligne */}
+      <AlertDialog open={!!deleteConfirmId} onOpenChange={() => setDeleteConfirmId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmer la suppression</AlertDialogTitle>
+            <AlertDialogDescription>
+              Êtes-vous sûr de vouloir supprimer cet appareil ? Cette action est irréversible.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction onClick={() => deleteConfirmId && handleConfirmDelete(deleteConfirmId)}>
+              Supprimer
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Confirmation de suppression multiple */}
+      <AlertDialog open={bulkDeleteConfirm} onOpenChange={setBulkDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmer la suppression multiple</AlertDialogTitle>
+            <AlertDialogDescription>
+              Êtes-vous sûr de vouloir supprimer tous les appareils sélectionnés ? Cette action est irréversible.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction onClick={handleBulkDelete}>
+              Supprimer
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Confirmation de suppression des doublons */}
+      <AlertDialog open={showDuplicatesConfirm} onOpenChange={setShowDuplicatesConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Nettoyage des doublons</AlertDialogTitle>
+            <AlertDialogDescription>
+              Êtes-vous sûr de vouloir supprimer tous les doublons de la base de données ? Cette action est irréversible.
+              {duplicatesCount > 0 && (
+                <p className="mt-2 font-semibold">Nombre de doublons détectés : {duplicatesCount}</p>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDuplicatesClean}>
+              Nettoyer les doublons
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Dialog pour afficher les références de pièces */}
+      {selectedApplianceForParts && (
+        <PartReferencesDialog
+          open={showPartRefsDialog}
+          onOpenChange={setShowPartRefsDialog}
+          applianceId={selectedApplianceForParts.id}
+          applianceReference={selectedApplianceForParts.reference}
+          getPartReferencesForAppliance={getPartReferencesForAppliance}
+        />
+      )}
     </div>
   );
 };

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Navigation from "@/components/Navigation";
@@ -23,6 +24,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import ApplianceEditDialog from "@/components/ApplianceEditDialog";
 
 interface Inconsistency {
   reference: string;
@@ -60,6 +62,10 @@ const Appliances: React.FC = () => {
   const [showAddPartDialog, setShowAddPartDialog] = useState(false);
   const [newPartReference, setNewPartReference] = useState("");
   const [selectedPartReference, setSelectedPartReference] = useState("");
+  
+  // État pour l'édition d'appareil
+  const [applianceToEdit, setApplianceToEdit] = useState<Appliance | null>(null);
+  const [showEditDialog, setShowEditDialog] = useState(false);
   
   // État pour suivre le nombre de doublons
   const [duplicatesCount, setDuplicatesCount] = useState(0);
@@ -342,6 +348,22 @@ const Appliances: React.FC = () => {
     }
   };
 
+  // Gérer l'édition d'un appareil
+  const handleEditButtonClick = (appliance: Appliance) => {
+    setApplianceToEdit(appliance);
+    setShowEditDialog(true);
+  };
+
+  // Mettre à jour un appareil après édition
+  const handleSaveEdit = (updatedAppliance: Appliance) => {
+    updateAppliance(updatedAppliance);
+    setShowEditDialog(false);
+    setApplianceToEdit(null);
+    toast("Appareil mis à jour", {
+      description: "Les modifications ont été enregistrées avec succès."
+    });
+  };
+
   return (
     <div className="flex flex-col min-h-screen">
       <Navigation />
@@ -452,13 +474,13 @@ const Appliances: React.FC = () => {
               <ApplianceList 
                 appliances={displayedAppliances} 
                 onDelete={deleteAppliance} 
-                onEdit={updateAppliance}
+                onEdit={handleEditButtonClick}
                 onSelect={handleSelectAppliance}
                 selected={selectedAppliances}
                 onSelectAll={handleSelectAll}
                 onBulkUpdate={handleBulkUpdate}
                 onBulkDelete={() => {
-                  // Add bulk delete functionality
+                  // Bulk delete handled in ApplianceList with confirmation
                   const selectedIds = Object.entries(selectedAppliances)
                     .filter(([_, selected]) => selected)
                     .map(([id]) => id);
@@ -470,6 +492,7 @@ const Appliances: React.FC = () => {
                     return;
                   }
                   
+                  // La confirmation se fait dans ApplianceList maintenant
                   selectedIds.forEach(id => deleteAppliance(id));
                   
                   toast("Appareils supprimés", {
@@ -635,6 +658,18 @@ const Appliances: React.FC = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ApplianceEditDialog pour éditer les appareils */}
+      {applianceToEdit && (
+        <ApplianceEditDialog 
+          open={showEditDialog} 
+          onOpenChange={setShowEditDialog}
+          appliance={applianceToEdit}
+          onSave={handleSaveEdit}
+          knownBrands={knownBrands}
+          knownTypes={knownTypes}
+        />
+      )}
       
       <footer className="bg-gray-100 p-4 text-center text-gray-600">
         <p>© {new Date().getFullYear()} - Gestionnaire d'Appareils Électroménagers</p>
