@@ -11,22 +11,31 @@ import { Appliance } from "@/types/appliance";
 const Import: React.FC = () => {
   const { 
     importAppliances, 
-    knownBrands, 
-    knownTypes, 
-    knownPartReferences,
-    allAppliances,
+    knownBrands = [], // Provide default empty arrays
+    knownTypes = [], 
+    knownPartReferences = [],
+    allAppliances = [],
     associateApplicancesToPartReference,
     suggestBrand,
     suggestType
   } = useAppliances();
 
+  // Ensure we always have valid arrays even if the hook returns undefined
+  const safeKnownBrands = Array.isArray(knownBrands) ? knownBrands : [];
+  const safeKnownTypes = Array.isArray(knownTypes) ? knownTypes : [];
+  const safeKnownPartReferences = Array.isArray(knownPartReferences) ? knownPartReferences : [];
+  const safeAllAppliances = Array.isArray(allAppliances) ? allAppliances : [];
+
   const getApplianceByReference = (ref: string) => {
-    return allAppliances.find(a => a.reference === ref);
+    return safeAllAppliances.find(a => a.reference === ref);
   };
 
   const handleImport = (appliancesToImport: Appliance[]): Appliance[] => {
     try {
-      const count = importAppliances(appliancesToImport);
+      // Ensure we have a valid array to import
+      const safeAppliancesToImport = Array.isArray(appliancesToImport) ? appliancesToImport : [];
+      
+      const count = importAppliances(safeAppliancesToImport);
 
       if (count === 0) {
         toast("Information", {
@@ -35,7 +44,7 @@ const Import: React.FC = () => {
       }
 
       // Retournons les appareils importés pour pouvoir les associer à une référence par la suite
-      return appliancesToImport;
+      return safeAppliancesToImport;
     } catch (error) {
       toast("Erreur d'importation", {
         description: "Une erreur est survenue lors de l'importation des données"
@@ -43,6 +52,27 @@ const Import: React.FC = () => {
       console.error("Import error:", error);
       return [];
     }
+  };
+
+  // Wrap the associateApplicancesToPartReference function to ensure it handles undefined properly
+  const safeAssociateAppliancesToPartReference = (applianceIds: string[], partReference: string) => {
+    if (!Array.isArray(applianceIds) || !partReference) {
+      console.warn("Invalid parameters for associateApplicancesToPartReference");
+      return 0;
+    }
+    return associateApplicancesToPartReference(applianceIds, partReference);
+  };
+
+  // Wrap the suggestBrand function to handle potential undefined
+  const safeSuggestBrand = (reference: string): string | null => {
+    if (!reference || typeof suggestBrand !== 'function') return null;
+    return suggestBrand(reference);
+  };
+
+  // Wrap the suggestType function to handle potential undefined
+  const safeSuggestType = (reference: string, brand: string): string | null => {
+    if (!reference || !brand || typeof suggestType !== 'function') return null;
+    return suggestType(reference, brand);
   };
 
   return (
@@ -58,13 +88,13 @@ const Import: React.FC = () => {
         <div className="grid grid-cols-1 gap-6">
           <ImportForm 
             onImport={handleImport} 
-            knownBrands={knownBrands} 
-            knownTypes={knownTypes}
-            knownPartReferences={knownPartReferences}
+            knownBrands={safeKnownBrands} 
+            knownTypes={safeKnownTypes}
+            knownPartReferences={safeKnownPartReferences}
             getApplianceByReference={getApplianceByReference}
-            suggestBrand={suggestBrand}
-            suggestType={suggestType}
-            associateAppliancesToPartReference={associateApplicancesToPartReference}
+            suggestBrand={safeSuggestBrand}
+            suggestType={safeSuggestType}
+            associateAppliancesToPartReference={safeAssociateAppliancesToPartReference}
           />
         </div>
       </main>
