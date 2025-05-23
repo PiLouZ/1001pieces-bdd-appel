@@ -1,4 +1,3 @@
-
 import { Appliance, ImportResult } from "@/types/appliance";
 
 // Define the ProcessedRow type for importing
@@ -15,7 +14,7 @@ export interface ProcessedRow {
  * - 4 colonnes : Type, Marque, Référence technique, Référence commerciale
  * - 2 colonnes : Référence technique, Référence commerciale
  */
-export function parseClipboardData(data: string): ImportResult {
+export function parseClipboardData(data: string, getApplianceByReference?: (ref: string) => Appliance | undefined, suggestBrand?: (ref: string) => string | null, suggestType?: (ref: string, brand: string) => string | null): ImportResult {
   const lines = data
     .split("\n")
     .map(line => line.trim())
@@ -65,7 +64,50 @@ export function parseClipboardData(data: string): ImportResult {
   );
 
   // Pour le format à 2 colonnes, on cherche à compléter les données
-  if (isTwoColumnFormat) {
+  if (isTwoColumnFormat && getApplianceByReference && suggestBrand && suggestType) {
+    // Essayer de compléter les données manquantes
+    const completedAppliances = detectedAppliances.map(app => {
+      // Vérifier si cet appareil existe déjà dans la base de données
+      const existingApp = getApplianceByReference(app.reference);
+      
+      if (existingApp) {
+        // Si l'appareil existe déjà, utiliser ses informations
+        return {
+          ...app,
+          brand: existingApp.brand || app.brand,
+          type: existingApp.type || app.type
+        };
+      } else {
+        // Sinon, essayer de suggérer les valeurs manquantes
+        const suggestedBrand = suggestBrand(app.reference) || "";
+        const suggestedType = suggestType(app.reference, suggestedBrand) || "";
+        
+        return {
+          ...app,
+          brand: suggestedBrand,
+          type: suggestedType
+        };
+      }
+    });
+    
+    // Vérifier si on a pu compléter toutes les données
+    const stillNeedingInfo = completedAppliances.filter(app => !app.brand || !app.type);
+    
+    if (stillNeedingInfo.length > 0) {
+      return {
+        success: true,
+        appliances: completedAppliances,
+        missingInfo: stillNeedingInfo,
+        twoColumnsFormat: true
+      };
+    } else {
+      return {
+        success: true,
+        appliances: completedAppliances,
+        twoColumnsFormat: true
+      };
+    }
+  } else if (isTwoColumnFormat) {
     // On retourne les appareils sans demander de compléter
     return {
       success: true,
@@ -363,4 +405,3 @@ export async function parseImportedFile(content: string): Promise<{ processedRow
     return { processedRows: [] };
   }
 }
-

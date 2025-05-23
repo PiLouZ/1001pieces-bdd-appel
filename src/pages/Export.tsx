@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Navigation from "@/components/Navigation";
 import { useAppliances } from "@/hooks/useAppliances";
 import { downloadCSV, exportAppliances } from "@/utils/exportUtils";
-import { FileDown, Database, FileText } from "lucide-react";
+import { FileDown, Database, FileText, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Tabs, TabsList, TabsContent, TabsTrigger } from "@/components/ui/tabs";
@@ -12,6 +12,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Input } from "@/components/ui/input";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
+import { Check } from "lucide-react";
 
 const Export: React.FC = () => {
   const { 
@@ -24,6 +29,8 @@ const Export: React.FC = () => {
   const [includeHeader, setIncludeHeader] = useState(true);
   const [selectedPartReference, setSelectedPartReference] = useState("");
   const [exportType, setExportType] = useState<"all" | "by-part-reference">("all");
+  const [searchPartRef, setSearchPartRef] = useState(""); 
+  const [popoverOpen, setPopoverOpen] = useState(false);
 
   const handleExport = () => {
     try {
@@ -115,6 +122,11 @@ const Export: React.FC = () => {
     }
   };
 
+  const filteredPartReferences = searchPartRef 
+    ? knownPartReferences.filter(ref => 
+        ref.toLowerCase().includes(searchPartRef.toLowerCase()))
+    : knownPartReferences;
+
   return (
     <div className="flex flex-col min-h-screen">
       <Navigation />
@@ -152,19 +164,51 @@ const Export: React.FC = () => {
                 {exportType === "by-part-reference" && (
                   <div className="mt-4 pl-6">
                     <Label htmlFor="part-reference">Référence de la pièce</Label>
-                    <Select 
-                      value={selectedPartReference} 
-                      onValueChange={setSelectedPartReference}
-                    >
-                      <SelectTrigger className="mt-2">
-                        <SelectValue placeholder="Sélectionner une référence de pièce" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {knownPartReferences.map(ref => (
-                          <SelectItem key={ref} value={ref}>{ref}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={popoverOpen}
+                          className="w-full justify-between mt-2"
+                        >
+                          {selectedPartReference
+                            ? selectedPartReference
+                            : "Sélectionner une référence de pièce"}
+                          <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-full p-0">
+                        <Command>
+                          <CommandInput 
+                            placeholder="Rechercher une référence..." 
+                            onValueChange={setSearchPartRef}
+                            className="h-9"
+                          />
+                          <CommandEmpty>Aucune référence trouvée.</CommandEmpty>
+                          <CommandGroup>
+                            {filteredPartReferences.map((ref) => (
+                              <CommandItem
+                                key={ref}
+                                value={ref}
+                                onSelect={(currentValue) => {
+                                  setSelectedPartReference(currentValue);
+                                  setPopoverOpen(false);
+                                }}
+                              >
+                                {ref}
+                                <Check
+                                  className={cn(
+                                    "ml-auto h-4 w-4",
+                                    selectedPartReference === ref ? "opacity-100" : "opacity-0"
+                                  )}
+                                />
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
                   </div>
                 )}
               </div>
