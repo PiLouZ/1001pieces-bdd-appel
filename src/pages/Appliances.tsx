@@ -127,7 +127,16 @@ const Appliances: React.FC = () => {
     const updates = updateField === "brand" ? { brand: updateValue } : { type: updateValue };
     
     if (ids.length > 0) {
-      associateApplicancesToPartReference(ids, newPartRef);
+      ids.forEach(id => {
+        const appliance = appliances.find(app => app.id === id);
+        if (appliance) {
+          updateAppliance({
+            ...appliance,
+            ...updates
+          });
+        }
+      });
+      
       toast("Succès", {
         description: `${ids.length} appareils mis à jour avec succès`
       });
@@ -208,10 +217,10 @@ const Appliances: React.FC = () => {
       <div className="flex space-x-2">
         {knownBrands.length > 0 && (
           <Card>
-            <CardHeader>
-              <CardTitle>Marques ({knownBrands.length})</CardTitle>
+            <CardHeader className="py-2 px-4">
+              <CardTitle className="text-sm">Marques ({knownBrands.length})</CardTitle>
             </CardHeader>
-            <CardContent className="h-32 overflow-auto">
+            <CardContent className="h-32 overflow-auto py-2 px-4">
               {knownBrands.map(brand => (
                 <div key={brand} className="text-sm">{brand}</div>
               ))}
@@ -220,10 +229,10 @@ const Appliances: React.FC = () => {
         )}
         {knownTypes.length > 0 && (
           <Card>
-            <CardHeader>
-              <CardTitle>Types ({knownTypes.length})</CardTitle>
+            <CardHeader className="py-2 px-4">
+              <CardTitle className="text-sm">Types ({knownTypes.length})</CardTitle>
             </CardHeader>
-            <CardContent className="h-32 overflow-auto">
+            <CardContent className="h-32 overflow-auto py-2 px-4">
               {knownTypes.map(type => (
                 <div key={type} className="text-sm">{type}</div>
               ))}
@@ -377,33 +386,31 @@ const Appliances: React.FC = () => {
               {updateField === "brand" && (
                 <>
                   <Label htmlFor="brand">Marque</Label>
-                  <select 
-                    id="brand"
-                    className="w-full p-2 border rounded-md"
-                    value={updateValue}
-                    onChange={(e) => setUpdateValue(e.target.value)}
-                  >
-                    <option value="">Sélectionner...</option>
-                    {knownBrands && knownBrands.map(brand => (
-                      <option key={brand} value={brand}>{brand}</option>
-                    ))}
-                  </select>
+                  <Select value={updateValue} onValueChange={setUpdateValue}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Sélectionner une marque" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {knownBrands && knownBrands.map(brand => (
+                        <SelectItem key={brand} value={brand}>{brand}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </>
               )}
               {updateField === "type" && (
                 <>
                   <Label htmlFor="type">Type</Label>
-                  <select 
-                    id="type"
-                    className="w-full p-2 border rounded-md"
-                    value={updateValue}
-                    onChange={(e) => setUpdateValue(e.target.value)}
-                  >
-                    <option value="">Sélectionner...</option>
-                    {knownTypes && knownTypes.map(type => (
-                      <option key={type} value={type}>{type}</option>
-                    ))}
-                  </select>
+                  <Select value={updateValue} onValueChange={setUpdateValue}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Sélectionner un type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {knownTypes && knownTypes.map(type => (
+                        <SelectItem key={type} value={type}>{type}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </>
               )}
             </div>

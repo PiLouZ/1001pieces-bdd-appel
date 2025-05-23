@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from "react";
 import { Appliance, ApplianceSelection, ApplianceEditable } from "@/types/appliance";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,15 @@ import {
   X,
   Tag
 } from "lucide-react";
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
+} from "@/components/ui/table";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -215,171 +225,161 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
         </>
       )}
       
-      {/* Tableau des appareils */}
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          {/* En-tête du tableau */}
-          <thead>
-            <tr>
+      {/* Tableau des appareils avec Table de shadcn/ui */}
+      <div className="overflow-x-auto rounded-md border">
+        <Table>
+          <TableHeader>
+            <TableRow>
               {onToggleSelection && (
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <TableHead className="w-10">
                   <Checkbox disabled={!appliances.length} />
-                </th>
+                </TableHead>
               )}
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Référence
-              </th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Référence commerciale
-              </th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Marque
-              </th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Type
-              </th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Date d'ajout
-              </th>
-              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          
-          {/* Corps du tableau */}
-          <tbody>
-            {sortedAppliances.map((appliance) => (
-              <tr 
-                key={appliance.id} 
-                className="hover:bg-gray-50"
-              >
-                {/* Case à cocher pour la sélection */}
-                {onToggleSelection && (
-                  <td className="px-4 py-2 text-center">
-                    <Checkbox 
-                      checked={!!selectedAppliances[appliance.id]} 
-                      onCheckedChange={(checked) => {
-                        onToggleSelection(appliance.id, checked === true);
-                      }}
-                    />
-                  </td>
-                )}
-                
-                {/* Référence technique */}
-                <td className="px-4 py-2 font-medium">{appliance.reference}</td>
-                
-                {/* Référence commerciale */}
-                <td className="px-4 py-2 text-gray-600">
-                  {appliance.commercialRef || "—"}
-                </td>
-                
-                {/* Marque */}
-                <td className="px-4 py-2">
-                  {editableFields[appliance.id]?.brand?.isEditing ? (
-                    <div className="flex gap-1">
-                      <Input
-                        value={editableFields[appliance.id]?.brand?.value || appliance.brand}
-                        onChange={(e) => handleEditChange(appliance.id, "brand", e.target.value)}
-                        className="h-8 w-full"
-                        autoFocus
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") handleSave(appliance.id, "brand");
-                          if (e.key === "Escape") handleCancel(appliance.id, "brand");
+              <TableHead>Référence</TableHead>
+              <TableHead>Référence commerciale</TableHead>
+              <TableHead>Marque</TableHead>
+              <TableHead>Type</TableHead>
+              <TableHead>Date d'ajout</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {sortedAppliances.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={onToggleSelection ? 7 : 6} className="text-center h-24 text-muted-foreground">
+                  Aucune donnée
+                </TableCell>
+              </TableRow>
+            ) : (
+              sortedAppliances.map((appliance) => (
+                <TableRow key={appliance.id}>
+                  {/* Case à cocher pour la sélection */}
+                  {onToggleSelection && (
+                    <TableCell className="w-10">
+                      <Checkbox 
+                        checked={!!selectedAppliances[appliance.id]} 
+                        onCheckedChange={(checked) => {
+                          onToggleSelection(appliance.id, checked === true);
                         }}
                       />
-                      <Button size="sm" onClick={() => handleSave(appliance.id, "brand")} variant="ghost" className="h-8 w-8 p-0">
-                        <Check className="h-4 w-4" />
-                      </Button>
-                      <Button size="sm" onClick={() => handleCancel(appliance.id, "brand")} variant="ghost" className="h-8 w-8 p-0">
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ) : (
-                    <div 
-                      className="flex items-center group"
-                      onClick={() => handleStartEdit(appliance.id, "brand", appliance.brand)}
-                    >
-                      <span className={`${!appliance.brand ? "text-red-500 italic" : ""}`}>
-                        {appliance.brand || "Non spécifié"}
-                      </span>
-                      <Pencil className="ml-2 h-3.5 w-3.5 text-gray-400 invisible group-hover:visible" />
-                    </div>
+                    </TableCell>
                   )}
-                </td>
-                
-                {/* Type */}
-                <td className="px-4 py-2">
-                  {editableFields[appliance.id]?.type?.isEditing ? (
-                    <div className="flex gap-1">
-                      <Input
-                        value={editableFields[appliance.id]?.type?.value || appliance.type}
-                        onChange={(e) => handleEditChange(appliance.id, "type", e.target.value)}
-                        className="h-8 w-full"
-                        autoFocus
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") handleSave(appliance.id, "type");
-                          if (e.key === "Escape") handleCancel(appliance.id, "type");
+                  
+                  {/* Référence technique */}
+                  <TableCell className="font-medium">{appliance.reference}</TableCell>
+                  
+                  {/* Référence commerciale */}
+                  <TableCell className="text-gray-600">
+                    {appliance.commercialRef || "—"}
+                  </TableCell>
+                  
+                  {/* Marque */}
+                  <TableCell>
+                    {editableFields[appliance.id]?.brand?.isEditing ? (
+                      <div className="flex gap-1">
+                        <Input
+                          value={editableFields[appliance.id]?.brand?.value || appliance.brand}
+                          onChange={(e) => handleEditChange(appliance.id, "brand", e.target.value)}
+                          className="h-8 w-full"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handleSave(appliance.id, "brand");
+                            if (e.key === "Escape") handleCancel(appliance.id, "brand");
+                          }}
+                        />
+                        <Button size="sm" onClick={() => handleSave(appliance.id, "brand")} variant="ghost" className="h-8 w-8 p-0">
+                          <Check className="h-4 w-4" />
+                        </Button>
+                        <Button size="sm" onClick={() => handleCancel(appliance.id, "brand")} variant="ghost" className="h-8 w-8 p-0">
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <div 
+                        className="flex items-center group cursor-pointer"
+                        onClick={() => handleStartEdit(appliance.id, "brand", appliance.brand)}
+                      >
+                        <span className={`${!appliance.brand ? "text-red-500 italic" : ""}`}>
+                          {appliance.brand || "Non spécifié"}
+                        </span>
+                        <Pencil className="ml-2 h-3.5 w-3.5 text-gray-400 invisible group-hover:visible" />
+                      </div>
+                    )}
+                  </TableCell>
+                  
+                  {/* Type */}
+                  <TableCell>
+                    {editableFields[appliance.id]?.type?.isEditing ? (
+                      <div className="flex gap-1">
+                        <Input
+                          value={editableFields[appliance.id]?.type?.value || appliance.type}
+                          onChange={(e) => handleEditChange(appliance.id, "type", e.target.value)}
+                          className="h-8 w-full"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handleSave(appliance.id, "type");
+                            if (e.key === "Escape") handleCancel(appliance.id, "type");
+                          }}
+                        />
+                        <Button size="sm" onClick={() => handleSave(appliance.id, "type")} variant="ghost" className="h-8 w-8 p-0">
+                          <Check className="h-4 w-4" />
+                        </Button>
+                        <Button size="sm" onClick={() => handleCancel(appliance.id, "type")} variant="ghost" className="h-8 w-8 p-0">
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <div 
+                        className="flex items-center group cursor-pointer"
+                        onClick={() => handleStartEdit(appliance.id, "type", appliance.type)}
+                      >
+                        <span className={`${!appliance.type ? "text-red-500 italic" : ""}`}>
+                          {appliance.type || "Non spécifié"}
+                        </span>
+                        <Pencil className="ml-2 h-3.5 w-3.5 text-gray-400 invisible group-hover:visible" />
+                      </div>
+                    )}
+                  </TableCell>
+                  
+                  {/* Date d'ajout */}
+                  <TableCell className="text-gray-600">
+                    {new Date(appliance.dateAdded).toLocaleDateString()}
+                  </TableCell>
+                  
+                  {/* Actions */}
+                  <TableCell className="text-right">
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setPartReferencesOpen(true);
+                          setCurrentAppliance(appliance);
                         }}
-                      />
-                      <Button size="sm" onClick={() => handleSave(appliance.id, "type")} variant="ghost" className="h-8 w-8 p-0">
-                        <Check className="h-4 w-4" />
+                      >
+                        <Tag className="h-4 w-4" />
                       </Button>
-                      <Button size="sm" onClick={() => handleCancel(appliance.id, "type")} variant="ghost" className="h-8 w-8 p-0">
-                        <X className="h-4 w-4" />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onEdit(appliance)}
+                      >
+                        <Settings2 className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDelete(appliance.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
-                  ) : (
-                    <div 
-                      className="flex items-center group"
-                      onClick={() => handleStartEdit(appliance.id, "type", appliance.type)}
-                    >
-                      <span className={`${!appliance.type ? "text-red-500 italic" : ""}`}>
-                        {appliance.type || "Non spécifié"}
-                      </span>
-                      <Pencil className="ml-2 h-3.5 w-3.5 text-gray-400 invisible group-hover:visible" />
-                    </div>
-                  )}
-                </td>
-                
-                {/* Date d'ajout */}
-                <td className="px-4 py-2 text-gray-600">
-                  {new Date(appliance.dateAdded).toLocaleDateString()}
-                </td>
-                
-                {/* Actions */}
-                <td className="px-4 py-2 text-right">
-                  <div className="flex justify-end gap-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setPartReferencesOpen(true);
-                        setCurrentAppliance(appliance);
-                      }}
-                    >
-                      <Tag className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onEdit(appliance)}
-                    >
-                      <Settings2 className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onDelete(appliance.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
       </div>
       
       {/* Dialog pour afficher les références de pièces compatibles */}
