@@ -17,10 +17,11 @@ import { cn } from "@/lib/utils";
 import { Switch } from "@/components/ui/switch";
 
 const Export: React.FC = () => {
+  // Get appliances data with safe fallbacks
   const { 
-    appliances: allAppliances, 
-    knownPartReferences,
-    getAppliancesByPartReference
+    appliances: allAppliances = [], 
+    knownPartReferences = [],
+    getAppliancesByPartReference = () => []
   } = useAppliances();
   
   const [selectedFormat, setSelectedFormat] = useState<"csv" | "html" | "json">("csv");
