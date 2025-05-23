@@ -34,16 +34,16 @@ const Export: React.FC = () => {
   // Make sure we have valid appliances
   const safeAppliances = Array.isArray(allAppliances) ? allAppliances : [];
   
-  // Make sure we always have a valid array for part references
+  // Initialize an empty array for part references if it's undefined
   const safePartReferences = Array.isArray(knownPartReferences) ? knownPartReferences : [];
   
-  // Safely filter part references - ensure we're working with an array
-  const filteredPartReferences = searchPartRef 
+  // Ensure filtered references is always a valid array
+  const filteredPartReferences = searchPartRef && Array.isArray(safePartReferences)
     ? safePartReferences.filter(ref => 
         ref && typeof ref === 'string' && ref.toLowerCase().includes(searchPartRef.toLowerCase()))
     : safePartReferences;
   
-  // Helper function to ensure getAppliancesByPartReference always returns an array
+  // Ensure getCompatibleAppliances always returns an array
   const getCompatibleAppliances = (partRef: string) => {
     if (!getAppliancesByPartReference || !partRef) return [];
     const result = getAppliancesByPartReference(partRef);
@@ -201,7 +201,7 @@ const Export: React.FC = () => {
                           />
                           <CommandEmpty>Aucune référence trouvée.</CommandEmpty>
                           <CommandGroup>
-                            {filteredPartReferences.length > 0 ? (
+                            {filteredPartReferences && filteredPartReferences.length > 0 ? (
                               filteredPartReferences.map((ref) => (
                                 <CommandItem
                                   key={ref}
