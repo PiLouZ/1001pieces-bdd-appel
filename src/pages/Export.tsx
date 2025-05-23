@@ -34,14 +34,21 @@ const Export: React.FC = () => {
   // Make sure we have valid appliances
   const safeAppliances = Array.isArray(allAppliances) ? allAppliances : [];
   
-  // Make sure we always have a valid array for filtering
+  // Make sure we always have a valid array for part references
   const safePartReferences = Array.isArray(knownPartReferences) ? knownPartReferences : [];
   
-  // Safely filter part references
+  // Safely filter part references - ensure we're working with an array
   const filteredPartReferences = searchPartRef 
     ? safePartReferences.filter(ref => 
-        ref.toLowerCase().includes(searchPartRef.toLowerCase()))
+        ref && typeof ref === 'string' && ref.toLowerCase().includes(searchPartRef.toLowerCase()))
     : safePartReferences;
+  
+  // Helper function to ensure getAppliancesByPartReference always returns an array
+  const getCompatibleAppliances = (partRef: string) => {
+    if (!getAppliancesByPartReference || !partRef) return [];
+    const result = getAppliancesByPartReference(partRef);
+    return Array.isArray(result) ? result : [];
+  };
   
   const handleExport = () => {
     try {
@@ -56,11 +63,8 @@ const Export: React.FC = () => {
       let fileName = `export-appareils-${new Date().toISOString().split('T')[0]}`;
       
       if (exportType === "by-part-reference" && selectedPartReference) {
-        // Ensure getAppliancesByPartReference returns an array
-        const compatibleAppliances = getAppliancesByPartReference 
-          ? getAppliancesByPartReference(selectedPartReference) 
-          : [];
-        appliancesToExport = Array.isArray(compatibleAppliances) ? compatibleAppliances : [];
+        // Use the helper function to ensure we always get an array
+        appliancesToExport = getCompatibleAppliances(selectedPartReference);
         fileName = `export-appareils-compatibles-${selectedPartReference}-${new Date().toISOString().split('T')[0]}`;
         
         if (appliancesToExport.length === 0) {
@@ -196,40 +200,32 @@ const Export: React.FC = () => {
                             className="h-9"
                           />
                           <CommandEmpty>Aucune référence trouvée.</CommandEmpty>
-                          {/* Wrap CommandGroup and its contents in a conditional check */}
-                          {safePartReferences.length > 0 ? (
-                            <CommandGroup>
-                              {filteredPartReferences.length > 0 ? (
-                                filteredPartReferences.map((ref) => (
-                                  <CommandItem
-                                    key={ref}
-                                    value={ref}
-                                    onSelect={(currentValue) => {
-                                      setSelectedPartReference(currentValue);
-                                      setPopoverOpen(false);
-                                    }}
-                                  >
-                                    {ref}
-                                    <Check
-                                      className={cn(
-                                        "ml-auto h-4 w-4",
-                                        selectedPartReference === ref ? "opacity-100" : "opacity-0"
-                                      )}
-                                    />
-                                  </CommandItem>
-                                ))
-                              ) : (
-                                <CommandItem disabled>
-                                  Aucune référence disponible
+                          <CommandGroup>
+                            {filteredPartReferences.length > 0 ? (
+                              filteredPartReferences.map((ref) => (
+                                <CommandItem
+                                  key={ref}
+                                  value={ref}
+                                  onSelect={(currentValue) => {
+                                    setSelectedPartReference(currentValue);
+                                    setPopoverOpen(false);
+                                  }}
+                                >
+                                  {ref}
+                                  <Check
+                                    className={cn(
+                                      "ml-auto h-4 w-4",
+                                      selectedPartReference === ref ? "opacity-100" : "opacity-0"
+                                    )}
+                                  />
                                 </CommandItem>
-                              )}
-                            </CommandGroup>
-                          ) : (
-                            // Skip rendering CommandGroup when no references available
-                            <div className="py-6 text-center text-sm text-muted-foreground">
-                              Aucune référence disponible
-                            </div>
-                          )}
+                              ))
+                            ) : (
+                              <CommandItem disabled>
+                                Aucune référence disponible
+                              </CommandItem>
+                            )}
+                          </CommandGroup>
                         </Command>
                       </PopoverContent>
                     </Popover>
@@ -305,12 +301,10 @@ const Export: React.FC = () => {
                       {!selectedPartReference ? (
                         "Sélectionnez une référence de pièce"
                       ) : (
-                        getAppliancesByPartReference && getAppliancesByPartReference(selectedPartReference).length === 0 ? (
+                        getCompatibleAppliances(selectedPartReference).length === 0 ? (
                           "Aucun appareil compatible avec cette référence"
                         ) : (
-                          getAppliancesByPartReference ? 
-                            `${getAppliancesByPartReference(selectedPartReference).length} appareils compatibles seront exportés` :
-                            "Aucun appareil compatible"
+                          `${getCompatibleAppliances(selectedPartReference).length} appareils compatibles seront exportés`
                         )
                       )}
                     </p>
