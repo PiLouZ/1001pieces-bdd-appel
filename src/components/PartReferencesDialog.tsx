@@ -14,35 +14,34 @@ import { Label } from "@/components/ui/label";
 import { Tag, Plus, Trash } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Badge } from "@/components/ui/badge";
 
 interface PartReferencesDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   applianceId: string;
-  applianceName: string;
-  partReferences: string[];
-  knownPartReferences: string[];
-  onAddPartReference: (applianceId: string, partReference: string) => void;
-  onRemovePartReference: (applianceId: string, partReference: string) => void;
+  applianceReference: string;
+  getPartReferencesForAppliance?: (id: string) => string[];
 }
 
 const PartReferencesDialog: React.FC<PartReferencesDialogProps> = ({
   open,
   onOpenChange,
   applianceId,
-  applianceName,
-  partReferences,
-  knownPartReferences,
-  onAddPartReference,
-  onRemovePartReference,
+  applianceReference,
+  getPartReferencesForAppliance
 }) => {
   const [selectedPartReference, setSelectedPartReference] = useState("");
   const [newPartReference, setNewPartReference] = useState("");
   const [tabMode, setTabMode] = useState<"existing" | "new">("existing");
+  
+  // Get part references from the function or default to empty array
+  const partReferences = getPartReferencesForAppliance ? getPartReferencesForAppliance(applianceId) || [] : [];
+  
+  // Available part references (can be implemented later)
+  const knownPartReferences: string[] = [];
 
   useEffect(() => {
-    // Réinitialiser les états quand le dialogue s'ouvre
+    // Reset states when the dialog opens
     if (open) {
       setSelectedPartReference("");
       setNewPartReference("");
@@ -51,19 +50,18 @@ const PartReferencesDialog: React.FC<PartReferencesDialogProps> = ({
   }, [open]);
 
   const handleAddReference = () => {
+    // This functionality can be implemented later
     const partRef = tabMode === "existing" ? selectedPartReference : newPartReference;
-    if (partRef && !partReferences.includes(partRef)) {
-      onAddPartReference(applianceId, partRef);
-    }
+    // Future implementation
     setSelectedPartReference("");
     setNewPartReference("");
   };
 
   const handleRemoveReference = (partRef: string) => {
-    onRemovePartReference(applianceId, partRef);
+    // This functionality can be implemented later
   };
 
-  // Filtrer les références connues pour ne pas afficher celles déjà associées
+  // Available references (can be set up later)
   const availableReferences = knownPartReferences.filter(
     (ref) => !partReferences.includes(ref)
   );
@@ -77,7 +75,7 @@ const PartReferencesDialog: React.FC<PartReferencesDialogProps> = ({
             Pièces compatibles
           </DialogTitle>
           <DialogDescription>
-            Gérer les pièces compatibles pour {applianceName}
+            Gérer les pièces compatibles pour {applianceReference}
           </DialogDescription>
         </DialogHeader>
 

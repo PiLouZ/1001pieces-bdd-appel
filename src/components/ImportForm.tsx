@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { FileInput } from "@/components/ui/file-input";
 
 interface ImportFormProps {
-  onImport: (appliances: Appliance[]) => void;
+  onImport: (appliances: Appliance[]) => Appliance[];
   knownBrands: string[];
   knownTypes: string[];
   knownPartReferences: string[];
@@ -77,7 +77,7 @@ const ImportForm: React.FC<ImportFormProps> = ({
             });
           } else {
             // Toutes les infos sont complètes, importer directement
-            const importedAppliances = await onImport(result.appliances);
+            const importedAppliances = onImport(result.appliances);
             
             // Si une référence de pièce est fournie, associer ces appareils
             const partRef = selectedPartReference || newPartReference;
@@ -118,7 +118,7 @@ const ImportForm: React.FC<ImportFormProps> = ({
           
         } else {
           // Format à 4 colonnes complet
-          const importedAppliances = await onImport(result.appliances);
+          const importedAppliances = onImport(result.appliances);
           
           // Si une référence de pièce est fournie, associer ces appareils
           const partRef = selectedPartReference || newPartReference;
@@ -192,7 +192,7 @@ const ImportForm: React.FC<ImportFormProps> = ({
             description: `${result.missingInfo.length} appareils ont besoin de compléments d'informations.`
           });
         } else {
-          const importedAppliances = await onImport(result.appliances);
+          const importedAppliances = onImport(result.appliances);
           
           // Si une référence de pièce est fournie, associer ces appareils
           const partRef = selectedPartReference || newPartReference;
@@ -256,16 +256,16 @@ const ImportForm: React.FC<ImportFormProps> = ({
   };
 
   const handleCompleteMissingInfo = (completedAppliances: Appliance[]) => {
-    onImport(completedAppliances);
+    const importedAppliances = onImport(completedAppliances);
     
     // Si une référence de pièce est fournie, associer ces appareils
     const partRef = selectedPartReference || newPartReference;
-    if (partRef && completedAppliances.length > 0) {
-      const applianceIds = completedAppliances.map(app => app.id);
-      associateAppliancesToPartReference(applianceIds, partRef);
+    if (partRef && importedAppliances && importedAppliances.length > 0) {
+      const applianceIds = importedAppliances.map(app => app.id);
+      const count = associateAppliancesToPartReference(applianceIds, partRef);
       
       // Générer et télécharger le CSV
-      const csvContent = exportAppliances(completedAppliances, {
+      const csvContent = exportAppliances(importedAppliances, {
         format: "csv",
         includeHeader: true,
         partReference: partRef
@@ -276,12 +276,12 @@ const ImportForm: React.FC<ImportFormProps> = ({
       
       toast({
         title: "Succès",
-        description: `${completedAppliances.length} appareils importés et associés à la référence ${partRef}. Un fichier CSV a été généré.`
+        description: `${importedAppliances.length} appareils importés et associés à la référence ${partRef}. Un fichier CSV a été généré.`
       });
     } else {
       toast({
         title: "Succès",
-        description: `${completedAppliances.length} appareils importés avec succès`
+        description: `${importedAppliances.length} appareils importés avec succès`
       });
     }
     

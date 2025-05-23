@@ -7,17 +7,17 @@ import { Label } from "@/components/ui/label";
 import { Appliance } from "@/types/appliance";
 
 interface ApplianceEditDialogProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onSave: (updatedAppliance: Appliance) => void;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   appliance: Appliance | null;
+  onSave: (updatedAppliance: Appliance) => void;
   knownBrands: string[];
   knownTypes: string[];
 }
 
 const ApplianceEditDialog: React.FC<ApplianceEditDialogProps> = ({
-  isOpen,
-  onClose,
+  open,
+  onOpenChange,
   onSave,
   appliance,
   knownBrands,
@@ -60,11 +60,11 @@ const ApplianceEditDialog: React.FC<ApplianceEditDialogProps> = ({
       ...formData
     });
     
-    onClose();
+    onOpenChange(false);
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>Modifier l'appareil</DialogTitle>
@@ -129,7 +129,7 @@ const ApplianceEditDialog: React.FC<ApplianceEditDialogProps> = ({
           </div>
           
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Annuler
             </Button>
             <Button type="submit">Enregistrer</Button>

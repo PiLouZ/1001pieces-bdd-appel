@@ -6,6 +6,7 @@ import { Import as ImportIcon } from "lucide-react";
 import ImportForm from "@/components/ImportForm";
 import { useAppliances } from "@/hooks/useAppliances";
 import { toast } from "sonner";
+import { Appliance } from "@/types/appliance";
 
 const Import: React.FC = () => {
   const { 
@@ -23,7 +24,7 @@ const Import: React.FC = () => {
     return allAppliances.find(a => a.reference === ref);
   };
 
-  const handleImport = (appliancesToImport: any) => {
+  const handleImport = (appliancesToImport: Appliance[]): Appliance[] => {
     try {
       const count = importAppliances(appliancesToImport);
 
