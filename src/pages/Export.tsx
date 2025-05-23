@@ -31,6 +31,18 @@ const Export: React.FC = () => {
   const [searchPartRef, setSearchPartRef] = useState(""); 
   const [popoverOpen, setPopoverOpen] = useState(false);
 
+  // Make sure we have valid appliances
+  const safeAppliances = Array.isArray(allAppliances) ? allAppliances : [];
+  
+  // Make sure we always have a valid array for filtering
+  const safePartReferences = Array.isArray(knownPartReferences) ? knownPartReferences : [];
+  
+  // Safely filter part references
+  const filteredPartReferences = searchPartRef 
+    ? safePartReferences.filter(ref => 
+        ref.toLowerCase().includes(searchPartRef.toLowerCase()))
+    : safePartReferences;
+  
   const handleExport = () => {
     try {
       if (exportType === "by-part-reference" && !selectedPartReference) {
@@ -40,11 +52,15 @@ const Export: React.FC = () => {
         return;
       }
 
-      let appliancesToExport = allAppliances;
+      let appliancesToExport = safeAppliances;
       let fileName = `export-appareils-${new Date().toISOString().split('T')[0]}`;
       
       if (exportType === "by-part-reference" && selectedPartReference) {
-        appliancesToExport = getAppliancesByPartReference(selectedPartReference);
+        // Ensure getAppliancesByPartReference returns an array
+        const compatibleAppliances = getAppliancesByPartReference 
+          ? getAppliancesByPartReference(selectedPartReference) 
+          : [];
+        appliancesToExport = Array.isArray(compatibleAppliances) ? compatibleAppliances : [];
         fileName = `export-appareils-compatibles-${selectedPartReference}-${new Date().toISOString().split('T')[0]}`;
         
         if (appliancesToExport.length === 0) {
@@ -121,14 +137,6 @@ const Export: React.FC = () => {
     }
   };
 
-  // Make sure we always have a valid array for filtering
-  const safePartReferences = Array.isArray(knownPartReferences) ? knownPartReferences : [];
-  
-  const filteredPartReferences = searchPartRef 
-    ? safePartReferences.filter(ref => 
-        ref.toLowerCase().includes(searchPartRef.toLowerCase()))
-    : safePartReferences;
-
   return (
     <div className="flex flex-col min-h-screen">
       <Navigation />
@@ -155,7 +163,7 @@ const Export: React.FC = () => {
                 >
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="all" id="all" />
-                    <Label htmlFor="all">Tous les appareils ({allAppliances.length})</Label>
+                    <Label htmlFor="all">Tous les appareils ({safeAppliances.length})</Label>
                   </div>
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="by-part-reference" id="by-part-reference" />
@@ -188,32 +196,40 @@ const Export: React.FC = () => {
                             className="h-9"
                           />
                           <CommandEmpty>Aucune référence trouvée.</CommandEmpty>
-                          <CommandGroup>
-                            {filteredPartReferences.length > 0 ? (
-                              filteredPartReferences.map((ref) => (
-                                <CommandItem
-                                  key={ref}
-                                  value={ref}
-                                  onSelect={(currentValue) => {
-                                    setSelectedPartReference(currentValue);
-                                    setPopoverOpen(false);
-                                  }}
-                                >
-                                  {ref}
-                                  <Check
-                                    className={cn(
-                                      "ml-auto h-4 w-4",
-                                      selectedPartReference === ref ? "opacity-100" : "opacity-0"
-                                    )}
-                                  />
+                          {/* Wrap CommandGroup and its contents in a conditional check */}
+                          {safePartReferences.length > 0 ? (
+                            <CommandGroup>
+                              {filteredPartReferences.length > 0 ? (
+                                filteredPartReferences.map((ref) => (
+                                  <CommandItem
+                                    key={ref}
+                                    value={ref}
+                                    onSelect={(currentValue) => {
+                                      setSelectedPartReference(currentValue);
+                                      setPopoverOpen(false);
+                                    }}
+                                  >
+                                    {ref}
+                                    <Check
+                                      className={cn(
+                                        "ml-auto h-4 w-4",
+                                        selectedPartReference === ref ? "opacity-100" : "opacity-0"
+                                      )}
+                                    />
+                                  </CommandItem>
+                                ))
+                              ) : (
+                                <CommandItem disabled>
+                                  Aucune référence disponible
                                 </CommandItem>
-                              ))
-                            ) : (
-                              <CommandItem disabled>
-                                Aucune référence disponible
-                              </CommandItem>
-                            )}
-                          </CommandGroup>
+                              )}
+                            </CommandGroup>
+                          ) : (
+                            // Skip rendering CommandGroup when no references available
+                            <div className="py-6 text-center text-sm text-muted-foreground">
+                              Aucune référence disponible
+                            </div>
+                          )}
                         </Command>
                       </PopoverContent>
                     </Popover>
@@ -275,10 +291,10 @@ const Export: React.FC = () => {
                   <div className="flex flex-col items-center justify-center h-full">
                     <Database className="h-10 w-10 text-gray-400 mb-2" />
                     <p className="text-center text-gray-500">
-                      {allAppliances.length === 0 ? (
+                      {safeAppliances.length === 0 ? (
                         "Aucun appareil à exporter"
                       ) : (
-                        `${allAppliances.length} appareils seront exportés`
+                        `${safeAppliances.length} appareils seront exportés`
                       )}
                     </p>
                   </div>
@@ -289,10 +305,12 @@ const Export: React.FC = () => {
                       {!selectedPartReference ? (
                         "Sélectionnez une référence de pièce"
                       ) : (
-                        getAppliancesByPartReference(selectedPartReference).length === 0 ? (
+                        getAppliancesByPartReference && getAppliancesByPartReference(selectedPartReference).length === 0 ? (
                           "Aucun appareil compatible avec cette référence"
                         ) : (
-                          `${getAppliancesByPartReference(selectedPartReference).length} appareils compatibles seront exportés`
+                          getAppliancesByPartReference ? 
+                            `${getAppliancesByPartReference(selectedPartReference).length} appareils compatibles seront exportés` :
+                            "Aucun appareil compatible"
                         )
                       )}
                     </p>
@@ -301,7 +319,7 @@ const Export: React.FC = () => {
               </div>
               
               <div className="flex justify-end">
-                <Button onClick={handleExport} disabled={allAppliances.length === 0}>
+                <Button onClick={handleExport} disabled={safeAppliances.length === 0}>
                   <FileDown className="mr-2 h-4 w-4" />
                   Télécharger
                 </Button>

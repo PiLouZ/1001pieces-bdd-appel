@@ -5,6 +5,8 @@ import { Appliance, ExportOptions } from "@/types/appliance";
  * Exports appliances to CSV, HTML, or JSON format based on options
  */
 export function exportAppliances(appliances: Appliance[], options: ExportOptions): string {
+  // Ensure appliances is always an array
+  const safeAppliances = Array.isArray(appliances) ? appliances : [];
   const { format, includeHeader = true, partReference } = options;
   
   if (format === "csv") {
@@ -22,7 +24,7 @@ export function exportAppliances(appliances: Appliance[], options: ExportOptions
     let csv = includeHeader ? headers.join("\t") + "\n" : "";
     
     // Add each appliance as a row
-    appliances.forEach(appliance => {
+    safeAppliances.forEach(appliance => {
       // Create the model field by concatenating reference and commercialRef
       const model = `${appliance.reference}${appliance.commercialRef ? " - " + appliance.commercialRef : ""}`;
       
@@ -57,7 +59,7 @@ export function exportAppliances(appliances: Appliance[], options: ExportOptions
     
     // Add data rows
     html += '<tbody>';
-    appliances.forEach(appliance => {
+    safeAppliances.forEach(appliance => {
       const model = `${appliance.reference}${appliance.commercialRef ? " - " + appliance.commercialRef : ""}`;
       
       html += '<tr>';
@@ -74,7 +76,7 @@ export function exportAppliances(appliances: Appliance[], options: ExportOptions
     return html;
   } else {
     // Return JSON string for other formats (including "json")
-    return JSON.stringify(appliances, null, 2);
+    return JSON.stringify(safeAppliances, null, 2);
   }
 }
 
