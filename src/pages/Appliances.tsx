@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -77,8 +78,7 @@ const Appliances: React.FC = () => {
     updateAppliance(appliance);
     setEditDialogOpen(false);
     setCurrentAppliance(null);
-    toast({
-      title: "Succès",
+    toast("Succès", {
       description: "Appareil mis à jour avec succès"
     });
   };
@@ -97,14 +97,12 @@ const Appliances: React.FC = () => {
         }
       });
       setSelectedAppliances({});
-      toast({
-        title: "Succès",
+      toast("Succès", {
         description: `${selectedCount} appareils supprimés`
       });
     } else if (currentAppliance) {
       deleteAppliance(currentAppliance.id);
-      toast({
-        title: "Succès",
+      toast("Succès", {
         description: "Appareil supprimé avec succès"
       });
     }
@@ -130,8 +128,7 @@ const Appliances: React.FC = () => {
     
     if (ids.length > 0) {
       associateApplicancesToPartReference(ids, newPartRef);
-      toast({
-        title: "Succès",
+      toast("Succès", {
         description: `${ids.length} appareils mis à jour avec succès`
       });
     }
@@ -247,8 +244,7 @@ const Appliances: React.FC = () => {
 
     if (ids.length > 0 && partRef) {
       associateApplicancesToPartReference(ids, partRef);
-      toast({
-        title: "Succès",
+      toast("Succès", {
         description: `${ids.length} appareils associés à la référence ${partRef}`
       });
     }
@@ -345,9 +341,9 @@ const Appliances: React.FC = () => {
         
         {/* Dialogue de modification */}
         <ApplianceEditDialog 
-          isOpen={editDialogOpen} 
+          open={editDialogOpen} 
+          onOpenChange={setEditDialogOpen}
           appliance={currentAppliance} 
-          onClose={() => setEditDialogOpen(false)}
           onSave={handleSaveEdit}
           knownBrands={knownBrands || []}
           knownTypes={knownTypes || []}
