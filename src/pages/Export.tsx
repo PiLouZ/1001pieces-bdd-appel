@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Navigation from "@/components/Navigation";
 import { useAppliances } from "@/hooks/useAppliances";
 import { downloadCSV, exportAppliances } from "@/utils/exportUtils";
-import { FileDown, Database, FileText, Search } from "lucide-react";
+import { FileDown, Database, FileText, Search, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Tabs, TabsList, TabsContent, TabsTrigger } from "@/components/ui/tabs";
@@ -16,7 +16,6 @@ import { Input } from "@/components/ui/input";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { Check } from "lucide-react";
 
 const Export: React.FC = () => {
   const { 
@@ -122,10 +121,13 @@ const Export: React.FC = () => {
     }
   };
 
+  // Make sure we always have a valid array for filtering
+  const safePartReferences = Array.isArray(knownPartReferences) ? knownPartReferences : [];
+  
   const filteredPartReferences = searchPartRef 
-    ? knownPartReferences.filter(ref => 
+    ? safePartReferences.filter(ref => 
         ref.toLowerCase().includes(searchPartRef.toLowerCase()))
-    : knownPartReferences;
+    : safePartReferences;
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -187,24 +189,30 @@ const Export: React.FC = () => {
                           />
                           <CommandEmpty>Aucune référence trouvée.</CommandEmpty>
                           <CommandGroup>
-                            {filteredPartReferences.map((ref) => (
-                              <CommandItem
-                                key={ref}
-                                value={ref}
-                                onSelect={(currentValue) => {
-                                  setSelectedPartReference(currentValue);
-                                  setPopoverOpen(false);
-                                }}
-                              >
-                                {ref}
-                                <Check
-                                  className={cn(
-                                    "ml-auto h-4 w-4",
-                                    selectedPartReference === ref ? "opacity-100" : "opacity-0"
-                                  )}
-                                />
+                            {filteredPartReferences.length > 0 ? (
+                              filteredPartReferences.map((ref) => (
+                                <CommandItem
+                                  key={ref}
+                                  value={ref}
+                                  onSelect={(currentValue) => {
+                                    setSelectedPartReference(currentValue);
+                                    setPopoverOpen(false);
+                                  }}
+                                >
+                                  {ref}
+                                  <Check
+                                    className={cn(
+                                      "ml-auto h-4 w-4",
+                                      selectedPartReference === ref ? "opacity-100" : "opacity-0"
+                                    )}
+                                  />
+                                </CommandItem>
+                              ))
+                            ) : (
+                              <CommandItem disabled>
+                                Aucune référence disponible
                               </CommandItem>
-                            ))}
+                            )}
                           </CommandGroup>
                         </Command>
                       </PopoverContent>
