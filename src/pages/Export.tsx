@@ -38,16 +38,24 @@ const Export: React.FC = () => {
   const safePartReferences = Array.isArray(knownPartReferences) ? knownPartReferences : [];
   
   // Ensure filtered references is always a valid array
-  const filteredPartReferences = searchPartRef && Array.isArray(safePartReferences)
-    ? safePartReferences.filter(ref => 
-        ref && typeof ref === 'string' && ref.toLowerCase().includes(searchPartRef.toLowerCase()))
-    : safePartReferences;
+  const filteredPartReferences = React.useMemo(() => {
+    if (!searchPartRef || !Array.isArray(safePartReferences)) return safePartReferences;
+    
+    return safePartReferences.filter(ref => 
+      ref && typeof ref === 'string' && ref.toLowerCase().includes(searchPartRef.toLowerCase())
+    );
+  }, [searchPartRef, safePartReferences]);
   
   // Ensure getCompatibleAppliances always returns an array
   const getCompatibleAppliances = (partRef: string) => {
     if (!getAppliancesByPartReference || !partRef) return [];
-    const result = getAppliancesByPartReference(partRef);
-    return Array.isArray(result) ? result : [];
+    try {
+      const result = getAppliancesByPartReference(partRef);
+      return Array.isArray(result) ? result : [];
+    } catch (error) {
+      console.error("Error getting compatible appliances:", error);
+      return [];
+    }
   };
   
   const handleExport = () => {
@@ -200,32 +208,40 @@ const Export: React.FC = () => {
                             className="h-9"
                           />
                           <CommandEmpty>Aucune référence trouvée.</CommandEmpty>
-                          <CommandGroup>
-                            {filteredPartReferences && filteredPartReferences.length > 0 ? (
-                              filteredPartReferences.map((ref) => (
-                                <CommandItem
-                                  key={ref}
-                                  value={ref}
-                                  onSelect={(currentValue) => {
-                                    setSelectedPartReference(currentValue);
-                                    setPopoverOpen(false);
-                                  }}
-                                >
-                                  {ref}
-                                  <Check
-                                    className={cn(
-                                      "ml-auto h-4 w-4",
-                                      selectedPartReference === ref ? "opacity-100" : "opacity-0"
-                                    )}
-                                  />
+                          {safePartReferences && safePartReferences.length > 0 ? (
+                            <CommandGroup>
+                              {filteredPartReferences && filteredPartReferences.length > 0 ? (
+                                filteredPartReferences.map((ref) => (
+                                  <CommandItem
+                                    key={ref}
+                                    value={ref}
+                                    onSelect={(currentValue) => {
+                                      setSelectedPartReference(currentValue);
+                                      setPopoverOpen(false);
+                                    }}
+                                  >
+                                    {ref}
+                                    <Check
+                                      className={cn(
+                                        "ml-auto h-4 w-4",
+                                        selectedPartReference === ref ? "opacity-100" : "opacity-0"
+                                      )}
+                                    />
+                                  </CommandItem>
+                                ))
+                              ) : (
+                                <CommandItem disabled>
+                                  Aucune référence trouvée
                                 </CommandItem>
-                              ))
-                            ) : (
+                              )}
+                            </CommandGroup>
+                          ) : (
+                            <CommandGroup>
                               <CommandItem disabled>
                                 Aucune référence disponible
                               </CommandItem>
-                            )}
-                          </CommandGroup>
+                            </CommandGroup>
+                          )}
                         </Command>
                       </PopoverContent>
                     </Popover>
