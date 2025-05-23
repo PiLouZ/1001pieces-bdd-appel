@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tag, Plus, Trash } from "lucide-react";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { toast } from "sonner";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface PartReferencesDialogProps {
@@ -20,7 +20,9 @@ interface PartReferencesDialogProps {
   onOpenChange: (open: boolean) => void;
   applianceId: string;
   applianceReference: string;
-  getPartReferencesForAppliance?: (id: string) => string[];
+  knownPartReferences: string[];
+  getPartReferencesForAppliance: (id: string) => string[];
+  associateAppliancesToPartReference: (applianceIds: string[], partRef: string) => number;
 }
 
 const PartReferencesDialog: React.FC<PartReferencesDialogProps> = ({
@@ -28,17 +30,25 @@ const PartReferencesDialog: React.FC<PartReferencesDialogProps> = ({
   onOpenChange,
   applianceId,
   applianceReference,
-  getPartReferencesForAppliance
+  knownPartReferences = [],
+  getPartReferencesForAppliance,
+  associateAppliancesToPartReference
 }) => {
   const [selectedPartReference, setSelectedPartReference] = useState("");
   const [newPartReference, setNewPartReference] = useState("");
   const [tabMode, setTabMode] = useState<"existing" | "new">("existing");
   
   // Get part references from the function or default to empty array
-  const partReferences = getPartReferencesForAppliance ? getPartReferencesForAppliance(applianceId) || [] : [];
+  const partReferences = getPartReferencesForAppliance ? 
+    getPartReferencesForAppliance(applianceId) || [] : [];
   
-  // Available part references (can be implemented later)
-  const knownPartReferences: string[] = [];
+  // Available part references (références connues non déjà associées)
+  const availableReferences = React.useMemo(() => {
+    if (!Array.isArray(knownPartReferences) || !Array.isArray(partReferences)) {
+      return [];
+    }
+    return knownPartReferences.filter(ref => !partReferences.includes(ref));
+  }, [knownPartReferences, partReferences]);
 
   useEffect(() => {
     // Reset states when the dialog opens
@@ -50,21 +60,29 @@ const PartReferencesDialog: React.FC<PartReferencesDialogProps> = ({
   }, [open]);
 
   const handleAddReference = () => {
-    // This functionality can be implemented later
+    // Utiliser la référence sélectionnée ou la nouvelle
     const partRef = tabMode === "existing" ? selectedPartReference : newPartReference;
-    // Future implementation
-    setSelectedPartReference("");
-    setNewPartReference("");
+    
+    if (!partRef) return;
+    
+    // Associer l'appareil à cette référence
+    if (associateAppliancesToPartReference && applianceId) {
+      try {
+        associateAppliancesToPartReference([applianceId], partRef);
+        toast("Référence associée", {
+          description: `L'appareil a été associé à la référence ${partRef}`
+        });
+        // Réinitialiser les champs
+        setSelectedPartReference("");
+        setNewPartReference("");
+      } catch (error) {
+        console.error("Erreur lors de l'association:", error);
+        toast("Erreur", {
+          description: "Impossible d'associer la référence à l'appareil"
+        });
+      }
+    }
   };
-
-  const handleRemoveReference = (partRef: string) => {
-    // This functionality can be implemented later
-  };
-
-  // Available references (can be set up later)
-  const availableReferences = knownPartReferences.filter(
-    (ref) => !partReferences.includes(ref)
-  );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -84,7 +102,7 @@ const PartReferencesDialog: React.FC<PartReferencesDialogProps> = ({
           <div>
             <Label>Références associées ({partReferences.length})</Label>
             <ScrollArea className="h-[150px] border rounded-md p-2 mt-1">
-              {partReferences.length === 0 ? (
+              {!partReferences || partReferences.length === 0 ? (
                 <p className="text-sm text-gray-400 text-center p-4">
                   Aucune référence de pièce associée
                 </p>
@@ -96,7 +114,7 @@ const PartReferencesDialog: React.FC<PartReferencesDialogProps> = ({
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => handleRemoveReference(ref)}
+                        onClick={() => {/* Implémentation future */}}
                       >
                         <Trash className="h-4 w-4 text-red-500" />
                       </Button>
@@ -131,23 +149,20 @@ const PartReferencesDialog: React.FC<PartReferencesDialogProps> = ({
 
             {tabMode === "existing" ? (
               <div>
-                <Select
+                <select
+                  className="w-full p-2 border rounded-md"
                   value={selectedPartReference}
-                  onValueChange={setSelectedPartReference}
-                  disabled={availableReferences.length === 0}
+                  onChange={(e) => setSelectedPartReference(e.target.value)}
+                  disabled={!availableReferences || availableReferences.length === 0}
                 >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Sélectionner une référence" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableReferences.map((ref) => (
-                      <SelectItem key={ref} value={ref}>
-                        {ref}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {availableReferences.length === 0 && (
+                  <option value="">Sélectionner une référence</option>
+                  {availableReferences && availableReferences.map((ref) => (
+                    <option key={ref} value={ref}>
+                      {ref}
+                    </option>
+                  ))}
+                </select>
+                {(!availableReferences || availableReferences.length === 0) && (
                   <p className="text-xs text-amber-600 mt-1">
                     Toutes les références existantes sont déjà associées
                   </p>

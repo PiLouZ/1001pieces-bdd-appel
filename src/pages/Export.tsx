@@ -4,16 +4,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Navigation from "@/components/Navigation";
 import { useAppliances } from "@/hooks/useAppliances";
 import { downloadCSV, exportAppliances } from "@/utils/exportUtils";
-import { FileDown, Database, FileText, Search, Check } from "lucide-react";
+import { FileDown, Database, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Tabs, TabsList, TabsContent, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Input } from "@/components/ui/input";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { cn } from "@/lib/utils";
 import { Switch } from "@/components/ui/switch";
 
 const Export: React.FC = () => {
@@ -29,7 +26,6 @@ const Export: React.FC = () => {
   const [selectedPartReference, setSelectedPartReference] = useState("");
   const [exportType, setExportType] = useState<"all" | "by-part-reference">("all");
   const [searchPartRef, setSearchPartRef] = useState(""); 
-  const [popoverOpen, setPopoverOpen] = useState(false);
 
   // Make sure we have valid appliances
   const safeAppliances = Array.isArray(allAppliances) ? allAppliances : [];
@@ -37,7 +33,7 @@ const Export: React.FC = () => {
   // Initialize an empty array for part references if it's undefined
   const safePartReferences = Array.isArray(knownPartReferences) ? knownPartReferences : [];
   
-  // Ensure filtered references is always a valid array
+  // Filtrer les références de pièce selon la recherche
   const filteredPartReferences = React.useMemo(() => {
     if (!searchPartRef || !Array.isArray(safePartReferences)) return safePartReferences;
     
@@ -186,65 +182,29 @@ const Export: React.FC = () => {
                 {exportType === "by-part-reference" && (
                   <div className="mt-4 pl-6">
                     <Label htmlFor="part-reference">Référence de la pièce</Label>
-                    <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          role="combobox"
-                          aria-expanded={popoverOpen}
-                          className="w-full justify-between mt-2"
-                        >
-                          {selectedPartReference
-                            ? selectedPartReference
-                            : "Sélectionner une référence de pièce"}
-                          <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-full p-0">
-                        <Command>
-                          <CommandInput 
-                            placeholder="Rechercher une référence..." 
-                            onValueChange={setSearchPartRef}
-                            className="h-9"
-                          />
-                          <CommandEmpty>Aucune référence trouvée.</CommandEmpty>
-                          {safePartReferences && safePartReferences.length > 0 ? (
-                            <CommandGroup>
-                              {filteredPartReferences && filteredPartReferences.length > 0 ? (
-                                filteredPartReferences.map((ref) => (
-                                  <CommandItem
-                                    key={ref}
-                                    value={ref}
-                                    onSelect={(currentValue) => {
-                                      setSelectedPartReference(currentValue);
-                                      setPopoverOpen(false);
-                                    }}
-                                  >
-                                    {ref}
-                                    <Check
-                                      className={cn(
-                                        "ml-auto h-4 w-4",
-                                        selectedPartReference === ref ? "opacity-100" : "opacity-0"
-                                      )}
-                                    />
-                                  </CommandItem>
-                                ))
-                              ) : (
-                                <CommandItem disabled>
-                                  Aucune référence trouvée
-                                </CommandItem>
-                              )}
-                            </CommandGroup>
-                          ) : (
-                            <CommandGroup>
-                              <CommandItem disabled>
-                                Aucune référence disponible
-                              </CommandItem>
-                            </CommandGroup>
-                          )}
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
+                    <div className="mt-2">
+                      <div className="flex space-x-2">
+                        <Input 
+                          type="text"
+                          placeholder="Rechercher..." 
+                          value={searchPartRef}
+                          onChange={(e) => setSearchPartRef(e.target.value)}
+                          className="mb-2"
+                        />
+                      </div>
+                      <select 
+                        className="w-full p-2 border rounded-md"
+                        value={selectedPartReference}
+                        onChange={(e) => setSelectedPartReference(e.target.value)}
+                      >
+                        <option value="">Sélectionner une référence de pièce</option>
+                        {filteredPartReferences && filteredPartReferences.map((ref) => (
+                          <option key={ref} value={ref}>
+                            {ref}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
                 )}
               </div>

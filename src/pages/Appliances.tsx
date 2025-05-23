@@ -1,679 +1,481 @@
-
 import React, { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Navigation from "@/components/Navigation";
-import ApplianceList from "@/components/ApplianceList";
-import SearchBar from "@/components/SearchBar";
 import { useAppliances } from "@/hooks/useAppliances";
-import { Database, FileText, Filter, AlertCircle, Plus, Tag } from "lucide-react";
-import { Appliance, ApplianceSelection } from "@/types/appliance";
-import { Button } from "@/components/ui/button";
+import { Database, FileDown, Import, Settings2, Trash2, Tag, Pencil, Check, X } from "lucide-react";
 import { toast } from "sonner";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Appliance, ApplianceSelection, ApplianceEditable } from "@/types/appliance";
+import ApplianceEditDialog from "@/components/ApplianceEditDialog";
+import ApplianceList from "@/components/ApplianceList";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import ApplianceEditDialog from "@/components/ApplianceEditDialog";
-
-interface Inconsistency {
-  reference: string;
-  appliances: Appliance[];
-  type: "brand" | "type" | "both";
-}
 
 const Appliances: React.FC = () => {
-  const { 
-    appliances, 
-    searchQuery, 
-    setSearchQuery, 
-    deleteAppliance,
+  const {
+    appliances,
+    allAppliances,
+    searchQuery,
+    setSearchQuery,
     updateAppliance,
-    updateMultipleAppliances,
-    appliancesNeedingUpdate,
-    needsUpdateCount,
-    knownPartReferences,
+    deleteAppliance,
     knownBrands,
     knownTypes,
-    allAppliances,
-    associateApplicancesToPartReference,
+    knownPartReferences,
     getPartReferencesForAppliance,
-    cleanDatabase
+    associateApplicancesToPartReference
   } = useAppliances();
-  
+
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [currentAppliance, setCurrentAppliance] = useState<Appliance | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteMultiple, setDeleteMultiple] = useState(false);
   const [selectedAppliances, setSelectedAppliances] = useState<ApplianceSelection>({});
-  const [showNeedingUpdate, setShowNeedingUpdate] = useState(false);
-  const [inconsistencies, setInconsistencies] = useState<Inconsistency[]>([]);
-  const [showInconsistenciesDialog, setShowInconsistenciesDialog] = useState(false);
-  const [currentInconsistencyIndex, setCurrentInconsistencyIndex] = useState(0);
-  const [selectedResolution, setSelectedResolution] = useState<{[reference: string]: string}>({});
-  
-  // État pour la gestion de l'association de pièces
-  const [showAddPartDialog, setShowAddPartDialog] = useState(false);
-  const [newPartReference, setNewPartReference] = useState("");
-  const [selectedPartReference, setSelectedPartReference] = useState("");
-  
-  // État pour l'édition d'appareil
-  const [applianceToEdit, setApplianceToEdit] = useState<Appliance | null>(null);
-  const [showEditDialog, setShowEditDialog] = useState(false);
-  
-  // État pour suivre le nombre de doublons
-  const [duplicatesCount, setDuplicatesCount] = useState(0);
+  const [selectedCount, setSelectedCount] = useState(0);
+  const [editableFields, setEditableFields] = useState<Record<string, Record<string, ApplianceEditable>>>({});
+  const [updateSelectionDialogOpen, setUpdateSelectionDialogOpen] = useState(false);
+  const [updateField, setUpdateField] = useState<"brand" | "type">("brand");
+  const [updateValue, setUpdateValue] = useState("");
+  const [associateDialogOpen, setAssociateDialogOpen] = useState(false);
+  const [selectedPartRef, setSelectedPartRef] = useState("");
+  const [newPartRef, setNewPartRef] = useState("");
 
-  const displayedAppliances = showNeedingUpdate ? appliancesNeedingUpdate : appliances;
-  const selectedCount = Object.values(selectedAppliances).filter(Boolean).length;
-  const selectedIds = Object.entries(selectedAppliances)
-    .filter(([_, selected]) => selected)
-    .map(([id]) => id);
-  
-  // Fonction pour détecter les doublons
   useEffect(() => {
-    if (allAppliances.length > 0) {
-      // Utiliser un Set pour identifier les références uniques
-      const references = new Set<string>();
-      const duplicates = new Set<string>();
-      
-      allAppliances.forEach(appliance => {
-        if (references.has(appliance.reference)) {
-          duplicates.add(appliance.reference);
-        } else {
-          references.add(appliance.reference);
+    const count = Object.keys(selectedAppliances).filter(id => selectedAppliances[id]).length;
+    setSelectedCount(count);
+  }, [selectedAppliances]);
+
+  const hasSelection = selectedCount > 0;
+
+  const handleEdit = (appliance: Appliance) => {
+    setCurrentAppliance(appliance);
+    setEditDialogOpen(true);
+  };
+
+  const handleSaveEdit = (appliance: Appliance) => {
+    updateAppliance(appliance);
+    setEditDialogOpen(false);
+    setCurrentAppliance(null);
+    toast({
+      title: "Succès",
+      description: "Appareil mis à jour avec succès"
+    });
+  };
+
+  const handleDelete = (id: string) => {
+    setCurrentAppliance({ id } as Appliance);
+    setDeleteMultiple(false);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (deleteMultiple) {
+      Object.keys(selectedAppliances).forEach(id => {
+        if (selectedAppliances[id]) {
+          deleteAppliance(id);
         }
       });
-      
-      setDuplicatesCount(duplicates.size);
-    }
-  }, [allAppliances]);
-  
-  // Fonction pour détecter les incohérences
-  useEffect(() => {
-    if (allAppliances.length > 0) {
-      detectInconsistencies();
-    }
-  }, [allAppliances]);
-
-  const detectInconsistencies = () => {
-    const referenceMap: { [key: string]: Appliance[] } = {};
-    
-    // Regrouper les appareils par référence technique
-    allAppliances.forEach(appliance => {
-      if (!referenceMap[appliance.reference]) {
-        referenceMap[appliance.reference] = [];
-      }
-      referenceMap[appliance.reference].push(appliance);
-    });
-    
-    const foundInconsistencies: Inconsistency[] = [];
-    
-    // Analyser chaque groupe pour trouver les incohérences
-    Object.entries(referenceMap).forEach(([reference, applianceGroup]) => {
-      if (applianceGroup.length > 1) {
-        // Vérifier s'il y a des marques ou des types différents
-        const brands = new Set(applianceGroup.map(app => app.brand));
-        const types = new Set(applianceGroup.map(app => app.type));
-        
-        if (brands.size > 1 && types.size > 1) {
-          foundInconsistencies.push({
-            reference,
-            appliances: applianceGroup,
-            type: "both"
-          });
-        } else if (brands.size > 1) {
-          foundInconsistencies.push({
-            reference,
-            appliances: applianceGroup,
-            type: "brand"
-          });
-        } else if (types.size > 1) {
-          foundInconsistencies.push({
-            reference,
-            appliances: applianceGroup,
-            type: "type"
-          });
-        }
-      }
-    });
-    
-    setInconsistencies(foundInconsistencies);
-  };
-
-  const handleCheckInconsistencies = () => {
-    detectInconsistencies();
-    
-    if (inconsistencies.length > 0) {
-      setCurrentInconsistencyIndex(0);
-      setShowInconsistenciesDialog(true);
-    } else {
-      toast("Base de données cohérente", {
-        description: "Aucune incohérence n'a été détectée dans la base de données.",
+      setSelectedAppliances({});
+      toast({
+        title: "Succès",
+        description: `${selectedCount} appareils supprimés`
+      });
+    } else if (currentAppliance) {
+      deleteAppliance(currentAppliance.id);
+      toast({
+        title: "Succès",
+        description: "Appareil supprimé avec succès"
       });
     }
+    setDeleteDialogOpen(false);
+    setCurrentAppliance(null);
   };
 
-  const currentInconsistency = inconsistencies[currentInconsistencyIndex];
-
-  const handleResolveInconsistency = () => {
-    if (!currentInconsistency) return;
-    
-    const { reference, appliances, type } = currentInconsistency;
-    const selectedId = selectedResolution[reference];
-    const selectedAppliance = appliances.find(app => app.id === selectedId);
-    
-    if (!selectedAppliance) {
-      toast("Erreur", {
-        description: "Veuillez sélectionner une option à conserver.",
-      });
-      return;
-    }
-    
-    // Obtenir les IDs de tous les appareils à mettre à jour (sauf celui qui est sélectionné)
-    const applianceIdsToUpdate = appliances
-      .filter(app => app.id !== selectedId)
-      .map(app => app.id);
-    
-    if (type === "brand" || type === "both") {
-      updateMultipleAppliances(applianceIdsToUpdate, { brand: selectedAppliance.brand });
-    }
-    
-    if (type === "type" || type === "both") {
-      updateMultipleAppliances(applianceIdsToUpdate, { type: selectedAppliance.type });
-    }
-    
-    toast("Incohérence résolue", {
-      description: `Les appareils avec la référence ${reference} ont été mis à jour.`,
-    });
-    
-    // Passer à la prochaine incohérence ou fermer la boîte de dialogue
-    if (currentInconsistencyIndex < inconsistencies.length - 1) {
-      setCurrentInconsistencyIndex(currentInconsistencyIndex + 1);
-      // Réinitialiser la sélection pour la nouvelle incohérence
-      setSelectedResolution({});
-    } else {
-      setShowInconsistenciesDialog(false);
-      // Réinitialiser l'état
-      setCurrentInconsistencyIndex(0);
-      setSelectedResolution({});
-      // Actualiser la liste des incohérences
-      detectInconsistencies();
-    }
-  };
-
-  const handleMergeInconsistencies = () => {
-    if (!currentInconsistency) return;
-    
-    const { reference, appliances } = currentInconsistency;
-    const selectedId = selectedResolution[reference];
-    const selectedAppliance = appliances.find(app => app.id === selectedId);
-    
-    if (!selectedAppliance) {
-      toast("Erreur", {
-        description: "Veuillez sélectionner une option à conserver.",
-      });
-      return;
-    }
-    
-    // Obtenir les IDs de tous les appareils à supprimer (sauf celui qui est sélectionné)
-    const applianceIdsToDelete = appliances
-      .filter(app => app.id !== selectedId)
-      .map(app => app.id);
-    
-    // Supprimer les appareils en double
-    applianceIdsToDelete.forEach(id => deleteAppliance(id));
-    
-    toast("Fusion effectuée", {
-      description: `Les doublons avec la référence ${reference} ont été supprimés.`,
-    });
-    
-    // Passer à la prochaine incohérence ou fermer la boîte de dialogue
-    if (currentInconsistencyIndex < inconsistencies.length - 1) {
-      setCurrentInconsistencyIndex(currentInconsistencyIndex + 1);
-      // Réinitialiser la sélection pour la nouvelle incohérence
-      setSelectedResolution({});
-    } else {
-      setShowInconsistenciesDialog(false);
-      // Réinitialiser l'état
-      setCurrentInconsistencyIndex(0);
-      setSelectedResolution({});
-      // Actualiser la liste des incohérences
-      detectInconsistencies();
-    }
-  };
-
-  const handleNextInconsistency = () => {
-    if (currentInconsistencyIndex < inconsistencies.length - 1) {
-      setCurrentInconsistencyIndex(currentInconsistencyIndex + 1);
-      // Réinitialiser la sélection pour la nouvelle incohérence
-      setSelectedResolution({});
-    }
-  };
-
-  const handleSelectAppliance = (id: string, selected: boolean) => {
+  const handleToggleSelection = (id: string, selected: boolean) => {
     setSelectedAppliances(prev => ({
       ...prev,
       [id]: selected
     }));
   };
-  
-  const handleSelectAll = (selected: boolean) => {
-    const newSelection: ApplianceSelection = {};
-    displayedAppliances.forEach(app => {
-      newSelection[app.id] = selected;
-    });
-    setSelectedAppliances(newSelection);
+
+  const handleUpdateSelection = (field: "brand" | "type") => {
+    setUpdateField(field);
+    setUpdateSelectionDialogOpen(true);
   };
-  
-  const handleBulkUpdate = (field: keyof Omit<Partial<Appliance>, "id">, value: string) => {
-    if (selectedIds.length === 0) {
-      toast("Aucun appareil sélectionné", {
-        description: "Veuillez sélectionner au moins un appareil à modifier."
+
+  const confirmUpdateSelection = () => {
+    const ids = Object.keys(selectedAppliances).filter(id => selectedAppliances[id]);
+    const updates = updateField === "brand" ? { brand: updateValue } : { type: updateValue };
+    
+    if (ids.length > 0) {
+      associateApplicancesToPartReference(ids, newPartRef);
+      toast({
+        title: "Succès",
+        description: `${ids.length} appareils mis à jour avec succès`
       });
-      return;
     }
     
-    const updateCount = updateMultipleAppliances(selectedIds, { [field]: value });
-    
-    toast("Mise à jour effectuée", {
-      description: `${updateCount} appareils ont été mis à jour.`
-    });
-    
-    // Réinitialiser les sélections
+    setUpdateSelectionDialogOpen(false);
     setSelectedAppliances({});
   };
-  
-  const toggleUpdateFilter = () => {
-    setShowNeedingUpdate(!showNeedingUpdate);
-  };
-  
-  const handleOpenAddPartDialog = () => {
-    if (selectedIds.length === 0) {
-      toast("Aucun appareil sélectionné", {
-        description: "Veuillez sélectionner au moins un appareil pour associer une référence de pièce."
-      });
-      return;
-    }
-    setShowAddPartDialog(true);
-  };
-  
-  const handleAddPartReference = () => {
-    const partRef = selectedPartReference || newPartReference;
-    
-    if (!partRef.trim()) {
-      toast("Erreur", {
-        description: "Veuillez spécifier une référence de pièce"
-      });
-      return;
-    }
-    
-    if (selectedIds.length === 0) {
-      toast("Aucun appareil sélectionné", {
-        description: "Veuillez sélectionner au moins un appareil"
-      });
-      return;
-    }
-    
-    const count = associateApplicancesToPartReference(selectedIds, partRef);
-    
-    toast("Association réussie", {
-      description: `${count} appareils ont été associés à la référence de pièce ${partRef}`
-    });
-    
-    setShowAddPartDialog(false);
-    setNewPartReference("");
-    setSelectedPartReference("");
+
+  const handleDeleteSelection = () => {
+    setDeleteMultiple(true);
+    setDeleteDialogOpen(true);
   };
 
-  const handleCleanDuplicates = () => {
-    const removedCount = cleanDatabase();
-    
-    if (removedCount > 0) {
-      toast("Nettoyage terminé", {
-        description: `${removedCount} doublons ont été supprimés.`
-      });
-      // Mettre à jour le compteur
-      setDuplicatesCount(0);
-    } else {
-      toast("Information", {
-        description: "Aucun doublon trouvé dans la base de données."
+  const handleStartEdit = (id: string, field: string, value: string) => {
+    setEditableFields(prev => ({
+      ...prev,
+      [id]: {
+        ...prev[id],
+        [field]: {
+          value,
+          isEditing: true
+        }
+      }
+    }));
+  };
+
+  const handleEditChange = (id: string, field: string, value: string) => {
+    setEditableFields(prev => ({
+      ...prev,
+      [id]: {
+        ...prev[id],
+        [field]: {
+          ...prev[id]?.[field],
+          value
+        }
+      }
+    }));
+  };
+
+  const handleSave = (id: string, field: string) => {
+    const value = editableFields[id]?.[field]?.value || "";
+    const updatedAppliance = { ...appliances.find(app => app.id === id), [field]: value };
+    updateAppliance(updatedAppliance as Appliance);
+    setEditableFields(prev => ({
+      ...prev,
+      [id]: {
+        ...prev[id],
+        [field]: {
+          value,
+          isEditing: false
+        }
+      }
+    }));
+  };
+
+  const handleCancel = (id: string, field: string) => {
+    setEditableFields(prev => ({
+      ...prev,
+      [id]: {
+        ...prev[id],
+        [field]: {
+          ...prev[id]?.[field],
+          isEditing: false
+        }
+      }
+    }));
+  };
+
+  const SearchBar = ({ value, onChange, knownBrands, knownTypes }: { value: string, onChange: (value: string) => void, knownBrands: string[], knownTypes: string[] }) => (
+    <div className="flex flex-col space-y-2">
+      <Input
+        type="search"
+        placeholder="Rechercher par référence, marque ou type..."
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      <div className="flex space-x-2">
+        {knownBrands.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Marques ({knownBrands.length})</CardTitle>
+            </CardHeader>
+            <CardContent className="h-32 overflow-auto">
+              {knownBrands.map(brand => (
+                <div key={brand} className="text-sm">{brand}</div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+        {knownTypes.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Types ({knownTypes.length})</CardTitle>
+            </CardHeader>
+            <CardContent className="h-32 overflow-auto">
+              {knownTypes.map(type => (
+                <div key={type} className="text-sm">{type}</div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    </div>
+  );
+
+  const handleAssociateToPartRef = () => {
+    setAssociateDialogOpen(true);
+  };
+
+  const confirmAssociateToPartRef = () => {
+    const ids = Object.keys(selectedAppliances).filter(id => selectedAppliances[id]);
+    const partRef = selectedPartRef || newPartRef;
+
+    if (ids.length > 0 && partRef) {
+      associateApplicancesToPartReference(ids, partRef);
+      toast({
+        title: "Succès",
+        description: `${ids.length} appareils associés à la référence ${partRef}`
       });
     }
-  };
 
-  // Gérer l'édition d'un appareil
-  const handleEditButtonClick = (appliance: Appliance) => {
-    setApplianceToEdit(appliance);
-    setShowEditDialog(true);
-  };
-
-  // Mettre à jour un appareil après édition
-  const handleSaveEdit = (updatedAppliance: Appliance) => {
-    updateAppliance(updatedAppliance);
-    setShowEditDialog(false);
-    setApplianceToEdit(null);
-    toast("Appareil mis à jour", {
-      description: "Les modifications ont été enregistrées avec succès."
-    });
+    setAssociateDialogOpen(false);
+    setSelectedAppliances({});
+    setSelectedPartRef("");
+    setNewPartRef("");
   };
 
   return (
     <div className="flex flex-col min-h-screen">
       <Navigation />
-      
-      <main className="flex-1 container mx-auto py-8 px-4">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4">
+      <main className="flex-1 container mx-auto py-6 px-4">
+        <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold flex items-center">
-            <Database className="mr-2 h-6 w-6" />
-            Tous les appareils
+            <Database className="mr-2 h-6 w-6" /> 
+            Appareils ({allAppliances?.length || 0})
           </h1>
-          <SearchBar 
-            value={searchQuery} 
-            onChange={setSearchQuery} 
-            placeholder={knownPartReferences.length > 0 
-              ? "Rechercher par référence, marque, type ou référence de pièce..." 
-              : "Rechercher par référence, marque ou type..."}
-          />
+          <div className="flex space-x-2">
+            <Button asChild>
+              <Link to="/import">
+                <Import className="mr-2 h-4 w-4" /> Importer
+              </Link>
+            </Button>
+            <Button variant="outline" asChild>
+              <Link to="/export">
+                <FileDown className="mr-2 h-4 w-4" /> Exporter
+              </Link>
+            </Button>
+          </div>
         </div>
         
-        <div className="mb-4 flex flex-col sm:flex-row gap-2 items-start sm:items-center justify-between">
-          <div className="flex items-center gap-2 flex-wrap">
-            <Button 
-              variant={showNeedingUpdate ? "default" : "outline"} 
-              size="sm"
-              onClick={toggleUpdateFilter}
-              className="flex items-center gap-1"
-            >
-              <Filter className="h-4 w-4" />
-              Besoins de mise à jour
-              {needsUpdateCount > 0 && (
-                <Badge variant="destructive" className="ml-1">
-                  {needsUpdateCount}
-                </Badge>
-              )}
-            </Button>
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleCheckInconsistencies}
-              className="flex items-center gap-1"
-            >
-              <AlertCircle className="h-4 w-4" />
-              Vérifier les incohérences
-              {inconsistencies.length > 0 && (
-                <Badge variant="destructive" className="ml-1">
-                  {inconsistencies.length}
-                </Badge>
-              )}
-            </Button>
-            
-            {duplicatesCount > 0 && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleCleanDuplicates}
-                className="flex items-center gap-1"
-              >
-                <FileText className="h-4 w-4" />
-                Supprimer les doublons
-                <Badge variant="destructive" className="ml-1">
-                  {duplicatesCount}
-                </Badge>
-              </Button>
-            )}
-            
-            {selectedCount > 0 && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleOpenAddPartDialog}
-                className="flex items-center gap-1"
-              >
-                <Tag className="h-4 w-4" />
-                Associer à une référence de pièce
-              </Button>
-            )}
-          </div>
-          
-          {selectedCount > 0 && (
-            <div className="flex flex-wrap gap-2 items-center">
-              <span className="text-sm">{selectedCount} appareils sélectionnés</span>
+        {/* Recherche et filtres */}
+        <SearchBar 
+          value={searchQuery} 
+          onChange={setSearchQuery} 
+          knownBrands={knownBrands || []} 
+          knownTypes={knownTypes || []} 
+        />
+        
+        {/* Zone d'actions groupées */}
+        <div className="mb-4 mt-4">
+          {hasSelection && (
+            <div className="bg-gray-50 p-4 rounded-md border flex flex-wrap gap-2 items-center">
+              <span className="text-sm font-medium mr-2">{selectedCount} appareils sélectionnés</span>
               <Button 
                 size="sm" 
                 variant="outline" 
-                onClick={() => handleSelectAll(false)}
+                onClick={() => handleUpdateSelection("brand")}
               >
-                Désélectionner tout
+                <Pencil className="h-3.5 w-3.5 mr-1" />
+                Modifier marque
+              </Button>
+              <Button 
+                size="sm" 
+                variant="outline" 
+                onClick={() => handleUpdateSelection("type")}
+              >
+                <Pencil className="h-3.5 w-3.5 mr-1" />
+                Modifier type
+              </Button>
+              <Button 
+                size="sm" 
+                variant="outline" 
+                onClick={handleAssociateToPartRef}
+              >
+                <Tag className="h-3.5 w-3.5 mr-1" />
+                Associer à une pièce
+              </Button>
+              <Button 
+                size="sm" 
+                variant="destructive" 
+                onClick={handleDeleteSelection}
+              >
+                <Trash2 className="h-3.5 w-3.5 mr-1" />
+                Supprimer
               </Button>
             </div>
           )}
         </div>
         
-        <div className="grid grid-cols-1 gap-6">
-          <Card className="w-full">
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <span>Appareils {showNeedingUpdate ? "à mettre à jour" : "enregistrés"} ({displayedAppliances.length})</span>
-                <div className="text-sm text-muted-foreground font-normal">
-                  <span className="inline-flex items-center">
-                    <FileText className="mr-1 h-4 w-4" />
-                    Double-cliquez sur une cellule pour la modifier directement
-                  </span>
-                </div>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ApplianceList 
-                appliances={displayedAppliances} 
-                onDelete={deleteAppliance} 
-                onEdit={handleEditButtonClick}
-                onSelect={handleSelectAppliance}
-                selected={selectedAppliances}
-                onSelectAll={handleSelectAll}
-                onBulkUpdate={handleBulkUpdate}
-                onBulkDelete={() => {
-                  // Bulk delete handled in ApplianceList with confirmation
-                  const selectedIds = Object.entries(selectedAppliances)
-                    .filter(([_, selected]) => selected)
-                    .map(([id]) => id);
-                  
-                  if (selectedIds.length === 0) {
-                    toast("Aucun appareil sélectionné", {
-                      description: "Veuillez sélectionner au moins un appareil à supprimer."
-                    });
-                    return;
-                  }
-                  
-                  // La confirmation se fait dans ApplianceList maintenant
-                  selectedIds.forEach(id => deleteAppliance(id));
-                  
-                  toast("Appareils supprimés", {
-                    description: `${selectedIds.length} appareil(s) ont été supprimés.`
-                  });
-                  
-                  // Clear selections
-                  setSelectedAppliances({});
-                }}
-                onDuplicatesCheck={handleCheckInconsistencies}
-                onShowDuplicates={handleCleanDuplicates}
-                duplicatesCount={duplicatesCount}
-                knownBrands={knownBrands}
-                knownTypes={knownTypes}
-                getPartReferencesForAppliance={getPartReferencesForAppliance}
-              />
-            </CardContent>
-          </Card>
-        </div>
-      </main>
-      
-      <Dialog open={showInconsistenciesDialog} onOpenChange={setShowInconsistenciesDialog}>
-        <DialogContent className="max-w-4xl">
-          <DialogHeader>
-            <DialogTitle>Résoudre les incohérences</DialogTitle>
-            <DialogDescription>
-              {inconsistencies.length > 0 && (
-                <div className="text-sm">
-                  Incohérence {currentInconsistencyIndex + 1} sur {inconsistencies.length} : 
-                  La référence <strong>{currentInconsistency?.reference}</strong> apparaît plusieurs fois avec
-                  {currentInconsistency?.type === "brand" && " des marques différentes."}
-                  {currentInconsistency?.type === "type" && " des types d'appareil différents."}
-                  {currentInconsistency?.type === "both" && " des marques et des types d'appareil différents."}
-                </div>
+        {/* Liste des appareils */}
+        <ApplianceList 
+          appliances={appliances} 
+          onEdit={handleEdit}
+          onDelete={handleDelete}
+          onToggleSelection={handleToggleSelection}
+          selectedAppliances={selectedAppliances}
+          knownPartReferences={knownPartReferences || []}
+          getPartReferencesForAppliance={(id) => getPartReferencesForAppliance ? getPartReferencesForAppliance(id) : []}
+          associateAppliancesToPartReference={(ids, partRef) => associateApplicancesToPartReference ? associateApplicancesToPartReference(ids, partRef) : 0}
+        />
+        
+        {/* Dialogue de modification */}
+        <ApplianceEditDialog 
+          isOpen={editDialogOpen} 
+          appliance={currentAppliance} 
+          onClose={() => setEditDialogOpen(false)}
+          onSave={handleSaveEdit}
+          knownBrands={knownBrands || []}
+          knownTypes={knownTypes || []}
+        />
+
+        {/* Dialogue de confirmation de suppression */}
+        <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Confirmer la suppression</AlertDialogTitle>
+              <AlertDialogDescription>
+                Êtes-vous sûr de vouloir supprimer {deleteMultiple ? selectedCount : 'cet appareil'} ? Cette action est irréversible.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Annuler</AlertDialogCancel>
+              <AlertDialogAction onClick={confirmDelete}>Supprimer</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Dialogue pour la mise à jour groupée */}
+        <Dialog open={updateSelectionDialogOpen} onOpenChange={setUpdateSelectionDialogOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>
+                Modifier {selectedCount} appareils
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              {updateField === "brand" && (
+                <>
+                  <Label htmlFor="brand">Marque</Label>
+                  <select 
+                    id="brand"
+                    className="w-full p-2 border rounded-md"
+                    value={updateValue}
+                    onChange={(e) => setUpdateValue(e.target.value)}
+                  >
+                    <option value="">Sélectionner...</option>
+                    {knownBrands && knownBrands.map(brand => (
+                      <option key={brand} value={brand}>{brand}</option>
+                    ))}
+                  </select>
+                </>
               )}
-            </DialogDescription>
-          </DialogHeader>
-
-          {currentInconsistency && (
-            <div>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-12">Choix</TableHead>
-                    <TableHead>Référence</TableHead>
-                    <TableHead>Référence commerciale</TableHead>
-                    <TableHead>Marque</TableHead>
-                    <TableHead>Type</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {currentInconsistency.appliances.map(app => (
-                    <TableRow key={app.id} className={
-                      selectedResolution[currentInconsistency.reference] === app.id ? "bg-blue-50" : ""
-                    }>
-                      <TableCell>
-                        <RadioGroup
-                          value={selectedResolution[currentInconsistency.reference]}
-                          onValueChange={(value) => setSelectedResolution({
-                            ...selectedResolution,
-                            [currentInconsistency.reference]: value
-                          })}
-                        >
-                          <div className="flex items-center space-x-2">
-                            <RadioGroupItem value={app.id} id={`radio-${app.id}`} />
-                          </div>
-                        </RadioGroup>
-                      </TableCell>
-                      <TableCell className="font-medium">{app.reference}</TableCell>
-                      <TableCell>{app.commercialRef || "-"}</TableCell>
-                      <TableCell>{app.brand || "-"}</TableCell>
-                      <TableCell>{app.type || "-"}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-
-              <div className="mt-4 text-sm text-gray-600">
-                <p className="mb-2">Options de résolution :</p>
-                <ul className="list-disc ml-5 space-y-1">
-                  <li><strong>Corriger</strong> : Conserver tous les appareils mais uniformiser les données (marque/type) en fonction de l'option sélectionnée.</li>
-                  <li><strong>Fusionner</strong> : Conserver uniquement l'appareil sélectionné et supprimer les doublons.</li>
-                </ul>
-              </div>
+              {updateField === "type" && (
+                <>
+                  <Label htmlFor="type">Type</Label>
+                  <select 
+                    id="type"
+                    className="w-full p-2 border rounded-md"
+                    value={updateValue}
+                    onChange={(e) => setUpdateValue(e.target.value)}
+                  >
+                    <option value="">Sélectionner...</option>
+                    {knownTypes && knownTypes.map(type => (
+                      <option key={type} value={type}>{type}</option>
+                    ))}
+                  </select>
+                </>
+              )}
             </div>
-          )}
-          
-          <DialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-between sm:space-x-2">
-            <div className="flex space-x-2 mt-2 sm:mt-0">
-              <Button variant="outline" onClick={() => setShowInconsistenciesDialog(false)}>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setUpdateSelectionDialogOpen(false)}>
                 Annuler
               </Button>
-              {inconsistencies.length > 1 && currentInconsistencyIndex < inconsistencies.length - 1 && (
-                <Button variant="outline" onClick={handleNextInconsistency}>
-                  Ignorer / Suivant
-                </Button>
-              )}
-            </div>
-            <div className="flex space-x-2">
-              <Button onClick={handleResolveInconsistency}>
-                Corriger
+              <Button onClick={confirmUpdateSelection} disabled={!updateValue}>
+                Appliquer
               </Button>
-              <Button variant="destructive" onClick={handleMergeInconsistencies}>
-                Fusionner
-              </Button>
-            </div>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      
-      <Dialog open={showAddPartDialog} onOpenChange={setShowAddPartDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Associer à une référence de pièce</DialogTitle>
-            <DialogDescription>
-              Associer les {selectedIds.length} appareils sélectionnés à une référence de pièce.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4">
-            <div className="space-y-4">
-              <Tabs defaultValue="select">
-                <TabsList className="w-full">
-                  <TabsTrigger value="select" className="flex-1">Référence existante</TabsTrigger>
-                  <TabsTrigger value="new" className="flex-1">Nouvelle référence</TabsTrigger>
-                </TabsList>
-                <TabsContent value="select" className="space-y-4 pt-2">
-                  {knownPartReferences.length > 0 ? (
-                    <Select value={selectedPartReference} onValueChange={setSelectedPartReference}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Sélectionner une référence existante" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {knownPartReferences.map(ref => (
-                          <SelectItem key={ref} value={ref}>{ref}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <p className="text-sm text-gray-500">
-                      Aucune référence de pièce existante. Créez-en une nouvelle.
-                    </p>
-                  )}
-                </TabsContent>
-                <TabsContent value="new" className="space-y-4 pt-2">
-                  <Label htmlFor="newPartReference">Nouvelle référence de pièce</Label>
-                  <Input 
-                    id="newPartReference"
-                    value={newPartReference}
-                    onChange={e => setNewPartReference(e.target.value)}
-                    placeholder="Ex: XYZ123"
-                  />
-                </TabsContent>
-              </Tabs>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAddPartDialog(false)}>
-              Annuler
-            </Button>
-            <Button onClick={handleAddPartReference}>
-              Associer
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
-      {/* ApplianceEditDialog pour éditer les appareils */}
-      {applianceToEdit && (
-        <ApplianceEditDialog 
-          open={showEditDialog} 
-          onOpenChange={setShowEditDialog}
-          appliance={applianceToEdit}
-          onSave={handleSaveEdit}
-          knownBrands={knownBrands}
-          knownTypes={knownTypes}
-        />
-      )}
-      
-      <footer className="bg-gray-100 p-4 text-center text-gray-600">
-        <p>© {new Date().getFullYear()} - Gestionnaire d'Appareils Électroménagers</p>
-      </footer>
+        {/* Dialogue pour associer à une référence de pièce */}
+        <Dialog open={associateDialogOpen} onOpenChange={setAssociateDialogOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>
+                Associer {selectedCount} appareils à une pièce
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="existing-part-ref">Référence de pièce existante</Label>
+                <Select value={selectedPartRef} onValueChange={setSelectedPartRef}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Sélectionner une référence" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {knownPartReferences && knownPartReferences.map(ref => (
+                      <SelectItem key={ref} value={ref}>{ref}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex items-center">
+                <div className="flex-1 h-px bg-gray-300"></div>
+                <span className="px-2 text-sm text-gray-500">OU</span>
+                <div className="flex-1 h-px bg-gray-300"></div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="new-part-ref">Nouvelle référence de pièce</Label>
+                <Input
+                  id="new-part-ref"
+                  value={newPartRef}
+                  onChange={(e) => setNewPartRef(e.target.value)}
+                  disabled={!!selectedPartRef}
+                  placeholder="ex: XRT123456"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setAssociateDialogOpen(false)}>
+                Annuler
+              </Button>
+              <Button 
+                onClick={confirmAssociateToPartRef} 
+                disabled={!selectedPartRef && !newPartRef}
+              >
+                Associer
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </main>
     </div>
   );
 };

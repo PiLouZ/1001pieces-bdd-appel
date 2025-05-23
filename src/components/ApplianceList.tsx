@@ -1,19 +1,16 @@
-
-// Import statements and types
-import React, { useState, useEffect } from "react";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import React, { useState, useMemo } from "react";
+import { Appliance, ApplianceSelection, ApplianceEditable } from "@/types/appliance";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Appliance, ApplianceSelection } from "@/types/appliance";
-import { toast } from "sonner";
-import { Edit, Trash2, Check, X, Filter, ChevronDown, ChevronUp } from "lucide-react";
-import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuItem, 
-  DropdownMenuTrigger 
-} from "@/components/ui/dropdown-menu";
+import {
+  Pencil,
+  Trash2,
+  Settings2,
+  Check,
+  X,
+  Tag
+} from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -24,539 +21,377 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import PartReferencesDialog from "./PartReferencesDialog";
 
-export interface ApplianceListProps {
+interface ApplianceListProps {
   appliances: Appliance[];
+  onEdit: (appliance: Appliance) => void;
   onDelete: (id: string) => void;
-  onEdit: (updatedAppliance: Appliance) => void;
-  onSelect: (id: string, selected: boolean) => void;
-  selected: ApplianceSelection;
-  onSelectAll: (selected: boolean) => void;
-  onBulkUpdate: (field: "source" | "brand" | "type" | "dateAdded" | "reference" | "commercialRef" | "lastUpdated", value: string) => void;
-  onBulkDelete: () => void;
-  onDuplicatesCheck: () => void;
-  onShowDuplicates: () => void;
-  duplicatesCount: number;
-  knownBrands: string[];
-  knownTypes: string[];
+  onToggleSelection?: (id: string, selected: boolean) => void;
+  selectedAppliances?: ApplianceSelection;
+  knownPartReferences?: string[];
   getPartReferencesForAppliance?: (id: string) => string[];
+  associateAppliancesToPartReference?: (ids: string[], partRef: string) => number;
 }
 
 const ApplianceList: React.FC<ApplianceListProps> = ({ 
   appliances, 
-  onDelete, 
   onEdit, 
-  onSelect,
-  selected,
-  onSelectAll,
-  onBulkUpdate,
-  onBulkDelete,
-  onDuplicatesCheck,
-  onShowDuplicates,
-  duplicatesCount,
-  knownBrands,
-  knownTypes,
-  getPartReferencesForAppliance
+  onDelete, 
+  onToggleSelection,
+  selectedAppliances = {},
+  knownPartReferences = [],
+  getPartReferencesForAppliance,
+  associateAppliancesToPartReference
 }) => {
-  const [sortField, setSortField] = useState<keyof Appliance | "partRefsCount">("reference");
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
-  const [isEditing, setIsEditing] = useState<{[key: string]: boolean}>({});
-  const [editValues, setEditValues] = useState<{[key: string]: string}>({});
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-  const [showDuplicatesConfirm, setShowDuplicatesConfirm] = useState(false);
-  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
-  const [showPartRefsDialog, setShowPartRefsDialog] = useState(false);
-  const [selectedApplianceForParts, setSelectedApplianceForParts] = useState<Appliance | null>(null);
-  
-  // Effet pour créer un ID unique pour chaque appareil s'il n'en a pas déjà un
-  useEffect(() => {
-    appliances.forEach(app => {
-      if (!app.id) {
-        app.id = `app-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-      }
-    });
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteMultiple, setDeleteMultiple] = useState(false);
+  const [applianceToDelete, setApplianceToDelete] = useState<string | null>(null);
+  const [editableFields, setEditableFields] = useState<Record<string, { brand?: ApplianceEditable; type?: ApplianceEditable }>>({});
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [currentAppliance, setCurrentAppliance] = useState<Appliance | null>(null);
+  const [updateSelectionDialogOpen, setUpdateSelectionDialogOpen] = useState(false);
+  const [updateField, setUpdateField] = useState<"brand" | "type" | null>(null);
+  const [updateValue, setUpdateValue] = useState("");
+  const [associateDialogOpen, setAssociateDialogOpen] = useState(false);
+  const [selectedPartRef, setSelectedPartRef] = useState("");
+  const [newPartRef, setNewPartRef] = useState("");
+  const [partReferencesOpen, setPartReferencesOpen] = useState(false);
+
+  const hasSelection = useMemo(() => Object.keys(selectedAppliances).some(key => selectedAppliances[key]), [selectedAppliances]);
+  const selectedCount = useMemo(() => Object.keys(selectedAppliances).filter(key => selectedAppliances[key]).length, [selectedAppliances]);
+
+  const sortedAppliances = useMemo(() => {
+    return [...appliances].sort((a, b) => a.reference.localeCompare(b.reference));
   }, [appliances]);
-  
-  // Gestion de tri
-  const handleSort = (field: keyof Appliance | "partRefsCount") => {
-    if (sortField === field) {
-      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
-    } else {
-      setSortField(field);
-      setSortDirection("asc");
+
+  const confirmDelete = () => {
+    if (deleteMultiple) {
+      Object.keys(selectedAppliances).forEach(id => {
+        if (selectedAppliances[id]) {
+          onDelete(id);
+        }
+      });
+    } else if (applianceToDelete) {
+      onDelete(applianceToDelete);
     }
+    setDeleteDialogOpen(false);
   };
-  
-  // Tri des appareils
-  const sortedAppliances = [...appliances].sort((a, b) => {
-    if (sortField === "partRefsCount") {
-      const aCount = getPartReferencesForAppliance?.(a.id)?.length || 0;
-      const bCount = getPartReferencesForAppliance?.(b.id)?.length || 0;
-      return sortDirection === "asc" ? aCount - bCount : bCount - aCount;
-    } else {
-      const aValue = String(a[sortField as keyof Appliance] || "");
-      const bValue = String(b[sortField as keyof Appliance] || "");
-      
-      if (sortDirection === "asc") {
-        return aValue.localeCompare(bValue);
-      } else {
-        return bValue.localeCompare(aValue);
+
+  const handleDelete = (id: string) => {
+    setApplianceToDelete(id);
+    setDeleteMultiple(false);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteSelection = () => {
+    setApplianceToDelete(null);
+    setDeleteMultiple(true);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleStartEdit = (id: string, field: "brand" | "type", initialValue: string) => {
+    setEditableFields(prev => ({
+      ...prev,
+      [id]: {
+        ...prev[id],
+        [field]: {
+          value: initialValue,
+          isEditing: true,
+        }
       }
-    }
-  });
-  
-  // Gestion des suppressions
-  const handleConfirmDelete = (id: string) => {
-    onDelete(id);
-    toast("Appareil supprimé", {
-      description: "L'appareil a été supprimé avec succès"
-    });
-    setDeleteConfirmId(null);
+    }));
   };
 
-  const handleDeleteClick = (id: string) => {
-    setDeleteConfirmId(id);
-  };
-  
-  const handleBulkDelete = () => {
-    onBulkDelete();
-    setBulkDeleteConfirm(false);
+  const handleEditChange = (id: string, field: "brand" | "type", value: string) => {
+    setEditableFields(prev => ({
+      ...prev,
+      [id]: {
+        ...prev[id],
+        [field]: {
+          ...prev[id]?.[field],
+          value: value,
+        }
+      }
+    }));
   };
 
-  const handleDuplicatesClean = () => {
-    onShowDuplicates();
-    setShowDuplicatesConfirm(false);
-  };
-  
-  // Edition inline
-  const startEditing = (id: string, field: string, value: string) => {
-    setIsEditing(prev => ({ ...prev, [`${id}-${field}`]: true }));
-    setEditValues(prev => ({ ...prev, [`${id}-${field}`]: value }));
-  };
-  
-  const cancelEditing = (id: string, field: string) => {
-    setIsEditing(prev => ({ ...prev, [`${id}-${field}`]: false }));
-    setEditValues(prev => {
-      const newValues = { ...prev };
-      delete newValues[`${id}-${field}`];
-      return newValues;
+  const handleSave = (id: string, field: "brand" | "type") => {
+    const updatedValue = editableFields[id]?.[field]?.value || "";
+    onEdit({
+      ...appliances.find(app => app.id === id)!,
+      [field]: updatedValue,
     });
+    setEditableFields(prev => ({
+      ...prev,
+      [id]: {
+        ...prev[id],
+        [field]: {
+          value: "",
+          isEditing: false,
+        }
+      }
+    }));
   };
-  
-  const saveEditing = (id: string, field: string, originalAppliance: Appliance) => {
-    const newValue = editValues[`${id}-${field}`];
-    if (typeof newValue !== 'undefined') {
-      // Vérifier si la valeur a changé
-      if (String(originalAppliance[field as keyof Appliance]) !== newValue) {
-        // Créer un appareil mis à jour avec la nouvelle valeur
-        const updatedAppliance = { ...originalAppliance, [field]: newValue };
-        onEdit(updatedAppliance);
-        toast("Appareil mis à jour", {
-          description: `Le champ ${field} a été mis à jour avec succès`
+
+  const handleCancel = (id: string, field: "brand" | "type") => {
+    setEditableFields(prev => ({
+      ...prev,
+      [id]: {
+        ...prev[id],
+        [field]: {
+          value: "",
+          isEditing: false,
+        }
+      }
+    }));
+  };
+
+  const handleEdit = (appliance: Appliance) => {
+    setCurrentAppliance(appliance);
+    setEditDialogOpen(true);
+  };
+
+  const handleSaveEdit = (appliance: Appliance) => {
+    onEdit(appliance);
+    setEditDialogOpen(false);
+  };
+
+  const handleUpdateSelection = (field: "brand" | "type") => {
+    setUpdateField(field);
+    setUpdateValue("");
+    setUpdateSelectionDialogOpen(true);
+  };
+
+  const confirmUpdateSelection = () => {
+    if (updateField && updateValue) {
+      const ids = Object.keys(selectedAppliances).filter(id => selectedAppliances[id]);
+      ids.forEach(id => {
+        onEdit({
+          ...appliances.find(app => app.id === id)!,
+          [updateField]: updateValue,
         });
-      }
-      // Réinitialiser l'état d'édition
-      cancelEditing(id, field);
+      });
+      setUpdateSelectionDialogOpen(false);
     }
   };
-  
-  const handleInputChange = (id: string, field: string, value: string) => {
-    setEditValues(prev => ({ ...prev, [`${id}-${field}`]: value }));
-  };
-  
-  const handleOpenPartRefs = (appliance: Appliance) => {
-    setSelectedApplianceForParts(appliance);
-    setShowPartRefsDialog(true);
-  };
-  
-  // Gestion des sélections
-  const isAllSelected = appliances.length > 0 && Object.keys(selected).length === appliances.length && 
-    Object.values(selected).every(Boolean);
-  
-  const isSomeSelected = Object.values(selected).some(Boolean) && !isAllSelected;
-  
-  const handleSelectAll = (checked: boolean) => {
-    onSelectAll(checked);
+
+  const confirmAssociateToPartRef = () => {
+    const partRef = selectedPartRef || newPartRef;
+    if (partRef) {
+      const ids = Object.keys(selectedAppliances).filter(id => selectedAppliances[id]);
+      associateAppliancesToPartReference!(ids, partRef);
+      setAssociateDialogOpen(false);
+    }
   };
 
   return (
-    <div className="rounded-md border">
-      <div className="flex items-center p-4 border-b">
-        <Checkbox
-          checked={isAllSelected}
-          onCheckedChange={handleSelectAll}
-          indeterminate={isSomeSelected}
-          aria-label="Sélectionner tous les appareils"
-        />
-        <div className="ml-auto flex gap-2">
-          {Object.values(selected).some(Boolean) && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="h-8">
-                  Actions groupées <ChevronDown className="ml-1 h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => setBulkDeleteConfirm(true)}>
-                  <Trash2 className="mr-2 h-4 w-4" /> Supprimer la sélection
-                </DropdownMenuItem>
-                {/* Autres actions groupées */}
-              </DropdownMenuContent>
-            </DropdownMenu>
+    <div className="space-y-4">
+      {appliances.length === 0 ? (
+        <p className="text-center text-gray-500">
+          Aucun appareil trouvé. Importez des données pour commencer.
+        </p>
+      ) : (
+        <>
+          {appliances.length === 1 && (
+            <p className="text-center text-gray-500">
+              1 appareil
+            </p>
           )}
+          {appliances.length > 1 && (
+            <p className="text-center text-gray-500">
+              {appliances.length} appareils
+            </p>
+          )}
+        </>
+      )}
+      
+      {/* Tableau des appareils */}
+      <div className="overflow-x-auto">
+        <table className="min-w-full divide-y divide-gray-200">
+          {/* En-tête du tableau */}
+          <thead>
+            <tr>
+              {onToggleSelection && (
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <Checkbox disabled={!appliances.length} />
+                </th>
+              )}
+              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Référence
+              </th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Référence commerciale
+              </th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Marque
+              </th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Type
+              </th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Date d'ajout
+              </th>
+              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Actions
+              </th>
+            </tr>
+          </thead>
           
-          <Button 
-            variant="outline" 
-            size="sm" 
-            className="h-8"
-            onClick={onDuplicatesCheck}
-          >
-            <Filter className="mr-2 h-4 w-4" /> Vérifier les incohérences
-          </Button>
-          
-          <Button 
-            variant="outline" 
-            size="sm" 
-            className="h-8"
-            onClick={() => setShowDuplicatesConfirm(true)}
-          >
-            Doublons {duplicatesCount > 0 && <span className="ml-1 rounded-full bg-red-500 px-2 py-1 text-xs text-white">{duplicatesCount}</span>}
-          </Button>
-        </div>
-      </div>
-
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-12"></TableHead>
-            <TableHead 
-              className="cursor-pointer"
-              onClick={() => handleSort("reference")}
-            >
-              Référence
-              {sortField === "reference" && (
-                sortDirection === "asc" ? 
-                <ChevronUp className="inline-block ml-1 h-4 w-4" /> : 
-                <ChevronDown className="inline-block ml-1 h-4 w-4" />
-              )}
-            </TableHead>
-            <TableHead 
-              className="cursor-pointer"
-              onClick={() => handleSort("commercialRef")}
-            >
-              Référence commerciale
-              {sortField === "commercialRef" && (
-                sortDirection === "asc" ? 
-                <ChevronUp className="inline-block ml-1 h-4 w-4" /> : 
-                <ChevronDown className="inline-block ml-1 h-4 w-4" />
-              )}
-            </TableHead>
-            <TableHead 
-              className="cursor-pointer"
-              onClick={() => handleSort("brand")}
-            >
-              Marque
-              {sortField === "brand" && (
-                sortDirection === "asc" ? 
-                <ChevronUp className="inline-block ml-1 h-4 w-4" /> : 
-                <ChevronDown className="inline-block ml-1 h-4 w-4" />
-              )}
-            </TableHead>
-            <TableHead 
-              className="cursor-pointer"
-              onClick={() => handleSort("type")}
-            >
-              Type
-              {sortField === "type" && (
-                sortDirection === "asc" ? 
-                <ChevronUp className="inline-block ml-1 h-4 w-4" /> : 
-                <ChevronDown className="inline-block ml-1 h-4 w-4" />
-              )}
-            </TableHead>
-            <TableHead 
-              className="cursor-pointer"
-              onClick={() => handleSort("partRefsCount")}
-            >
-              Pièces compatibles
-              {sortField === "partRefsCount" && (
-                sortDirection === "asc" ? 
-                <ChevronUp className="inline-block ml-1 h-4 w-4" /> : 
-                <ChevronDown className="inline-block ml-1 h-4 w-4" />
-              )}
-            </TableHead>
-            <TableHead className="w-[100px] text-right">Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {sortedAppliances.length === 0 ? (
-            <TableRow>
-              <TableCell colSpan={7} className="text-center">
-                Aucun appareil trouvé
-              </TableCell>
-            </TableRow>
-          ) : (
-            sortedAppliances.map((appliance) => (
-              <TableRow key={appliance.id}>
-                <TableCell>
-                  <Checkbox 
-                    checked={!!selected[appliance.id]} 
-                    onCheckedChange={(checked) => onSelect(appliance.id, checked === true)}
-                    aria-label="Sélectionner cet appareil"
-                  />
-                </TableCell>
-                <TableCell className="font-medium">
-                  {isEditing[`${appliance.id}-reference`] ? (
-                    <div className="flex items-center space-x-1">
+          {/* Corps du tableau */}
+          <tbody>
+            {sortedAppliances.map((appliance) => (
+              <tr 
+                key={appliance.id} 
+                className="hover:bg-gray-50"
+              >
+                {/* Case à cocher pour la sélection */}
+                {onToggleSelection && (
+                  <td className="px-4 py-2 text-center">
+                    <Checkbox 
+                      checked={!!selectedAppliances[appliance.id]} 
+                      onCheckedChange={(checked) => {
+                        onToggleSelection(appliance.id, checked === true);
+                      }}
+                    />
+                  </td>
+                )}
+                
+                {/* Référence technique */}
+                <td className="px-4 py-2 font-medium">{appliance.reference}</td>
+                
+                {/* Référence commerciale */}
+                <td className="px-4 py-2 text-gray-600">
+                  {appliance.commercialRef || "—"}
+                </td>
+                
+                {/* Marque */}
+                <td className="px-4 py-2">
+                  {editableFields[appliance.id]?.brand?.isEditing ? (
+                    <div className="flex gap-1">
                       <Input
-                        className="h-8"
-                        value={editValues[`${appliance.id}-reference`]}
-                        onChange={(e) => handleInputChange(appliance.id, "reference", e.target.value)}
+                        value={editableFields[appliance.id]?.brand?.value || appliance.brand}
+                        onChange={(e) => handleEditChange(appliance.id, "brand", e.target.value)}
+                        className="h-8 w-full"
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleSave(appliance.id, "brand");
+                          if (e.key === "Escape") handleCancel(appliance.id, "brand");
+                        }}
                       />
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => saveEditing(appliance.id, "reference", appliance)}
-                        className="h-8 w-8"
-                      >
+                      <Button size="sm" onClick={() => handleSave(appliance.id, "brand")} variant="ghost" className="h-8 w-8 p-0">
                         <Check className="h-4 w-4" />
                       </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => cancelEditing(appliance.id, "reference")}
-                        className="h-8 w-8"
-                      >
+                      <Button size="sm" onClick={() => handleCancel(appliance.id, "brand")} variant="ghost" className="h-8 w-8 p-0">
                         <X className="h-4 w-4" />
                       </Button>
                     </div>
                   ) : (
-                    <span
-                      className="cursor-pointer hover:underline"
-                      onClick={() => startEditing(appliance.id, "reference", appliance.reference)}
+                    <div 
+                      className="flex items-center group"
+                      onClick={() => handleStartEdit(appliance.id, "brand", appliance.brand)}
                     >
-                      {appliance.reference}
-                    </span>
+                      <span className={`${!appliance.brand ? "text-red-500 italic" : ""}`}>
+                        {appliance.brand || "Non spécifié"}
+                      </span>
+                      <Pencil className="ml-2 h-3.5 w-3.5 text-gray-400 invisible group-hover:visible" />
+                    </div>
                   )}
-                </TableCell>
-                <TableCell>
-                  {/* Commercial ref logic - similar to reference */}
-                  {isEditing[`${appliance.id}-commercialRef`] ? (
-                    <div className="flex items-center space-x-1">
+                </td>
+                
+                {/* Type */}
+                <td className="px-4 py-2">
+                  {editableFields[appliance.id]?.type?.isEditing ? (
+                    <div className="flex gap-1">
                       <Input
-                        className="h-8"
-                        value={editValues[`${appliance.id}-commercialRef`]}
-                        onChange={(e) => handleInputChange(appliance.id, "commercialRef", e.target.value)}
+                        value={editableFields[appliance.id]?.type?.value || appliance.type}
+                        onChange={(e) => handleEditChange(appliance.id, "type", e.target.value)}
+                        className="h-8 w-full"
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleSave(appliance.id, "type");
+                          if (e.key === "Escape") handleCancel(appliance.id, "type");
+                        }}
                       />
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => saveEditing(appliance.id, "commercialRef", appliance)}
-                        className="h-8 w-8"
-                      >
+                      <Button size="sm" onClick={() => handleSave(appliance.id, "type")} variant="ghost" className="h-8 w-8 p-0">
                         <Check className="h-4 w-4" />
                       </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => cancelEditing(appliance.id, "commercialRef")}
-                        className="h-8 w-8"
-                      >
+                      <Button size="sm" onClick={() => handleCancel(appliance.id, "type")} variant="ghost" className="h-8 w-8 p-0">
                         <X className="h-4 w-4" />
                       </Button>
                     </div>
                   ) : (
-                    <span
-                      className="cursor-pointer hover:underline"
-                      onClick={() => startEditing(appliance.id, "commercialRef", appliance.commercialRef || "")}
+                    <div 
+                      className="flex items-center group"
+                      onClick={() => handleStartEdit(appliance.id, "type", appliance.type)}
                     >
-                      {appliance.commercialRef || "-"}
-                    </span>
-                  )}
-                </TableCell>
-                <TableCell>
-                  {/* Brand logic - similar to reference */}
-                  {isEditing[`${appliance.id}-brand`] ? (
-                    <div className="flex items-center space-x-1">
-                      <Input
-                        className="h-8"
-                        list={`brands-${appliance.id}`}
-                        value={editValues[`${appliance.id}-brand`]}
-                        onChange={(e) => handleInputChange(appliance.id, "brand", e.target.value)}
-                      />
-                      <datalist id={`brands-${appliance.id}`}>
-                        {knownBrands.map((brand, i) => (
-                          <option key={i} value={brand} />
-                        ))}
-                      </datalist>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => saveEditing(appliance.id, "brand", appliance)}
-                        className="h-8 w-8"
-                      >
-                        <Check className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => cancelEditing(appliance.id, "brand")}
-                        className="h-8 w-8"
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
+                      <span className={`${!appliance.type ? "text-red-500 italic" : ""}`}>
+                        {appliance.type || "Non spécifié"}
+                      </span>
+                      <Pencil className="ml-2 h-3.5 w-3.5 text-gray-400 invisible group-hover:visible" />
                     </div>
-                  ) : (
-                    <span
-                      className="cursor-pointer hover:underline"
-                      onClick={() => startEditing(appliance.id, "brand", appliance.brand)}
-                    >
-                      {appliance.brand}
-                    </span>
                   )}
-                </TableCell>
-                <TableCell>
-                  {/* Type logic - similar to reference */}
-                  {isEditing[`${appliance.id}-type`] ? (
-                    <div className="flex items-center space-x-1">
-                      <Input
-                        className="h-8"
-                        list={`types-${appliance.id}`}
-                        value={editValues[`${appliance.id}-type`]}
-                        onChange={(e) => handleInputChange(appliance.id, "type", e.target.value)}
-                      />
-                      <datalist id={`types-${appliance.id}`}>
-                        {knownTypes.map((type, i) => (
-                          <option key={i} value={type} />
-                        ))}
-                      </datalist>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => saveEditing(appliance.id, "type", appliance)}
-                        className="h-8 w-8"
-                      >
-                        <Check className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => cancelEditing(appliance.id, "type")}
-                        className="h-8 w-8"
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ) : (
-                    <span
-                      className="cursor-pointer hover:underline"
-                      onClick={() => startEditing(appliance.id, "type", appliance.type)}
-                    >
-                      {appliance.type}
-                    </span>
-                  )}
-                </TableCell>
-                <TableCell>
-                  <button 
-                    className="text-blue-600 hover:underline"
-                    onClick={() => handleOpenPartRefs(appliance)}
-                  >
-                    {getPartReferencesForAppliance && appliance.id ? 
-                      (getPartReferencesForAppliance(appliance.id)?.length || 0) : 
-                      (appliance.partReferences?.length || 0)}
-                  </button>
-                </TableCell>
-                <TableCell className="text-right">
-                  <div className="flex justify-end">
+                </td>
+                
+                {/* Date d'ajout */}
+                <td className="px-4 py-2 text-gray-600">
+                  {new Date(appliance.dateAdded).toLocaleDateString()}
+                </td>
+                
+                {/* Actions */}
+                <td className="px-4 py-2 text-right">
+                  <div className="flex justify-end gap-2">
                     <Button
-                      onClick={() => onEdit(appliance)}
                       variant="ghost"
-                      size="icon"
+                      size="sm"
+                      onClick={() => {
+                        setPartReferencesOpen(true);
+                        setCurrentAppliance(appliance);
+                      }}
                     >
-                      <Edit className="h-4 w-4" />
-                      <span className="sr-only">Modifier</span>
+                      <Tag className="h-4 w-4" />
                     </Button>
                     <Button
-                      onClick={() => handleDeleteClick(appliance.id)}
                       variant="ghost"
-                      size="icon"
+                      size="sm"
+                      onClick={() => onEdit(appliance)}
+                    >
+                      <Settings2 className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onDelete(appliance.id)}
                     >
                       <Trash2 className="h-4 w-4" />
-                      <span className="sr-only">Supprimer</span>
                     </Button>
                   </div>
-                </TableCell>
-              </TableRow>
-            ))
-          )}
-        </TableBody>
-      </Table>
-
-      {/* Confirmation de suppression d'une ligne */}
-      <AlertDialog open={!!deleteConfirmId} onOpenChange={() => setDeleteConfirmId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Confirmer la suppression</AlertDialogTitle>
-            <AlertDialogDescription>
-              Êtes-vous sûr de vouloir supprimer cet appareil ? Cette action est irréversible.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Annuler</AlertDialogCancel>
-            <AlertDialogAction onClick={() => deleteConfirmId && handleConfirmDelete(deleteConfirmId)}>
-              Supprimer
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Confirmation de suppression multiple */}
-      <AlertDialog open={bulkDeleteConfirm} onOpenChange={setBulkDeleteConfirm}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Confirmer la suppression multiple</AlertDialogTitle>
-            <AlertDialogDescription>
-              Êtes-vous sûr de vouloir supprimer tous les appareils sélectionnés ? Cette action est irréversible.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Annuler</AlertDialogCancel>
-            <AlertDialogAction onClick={handleBulkDelete}>
-              Supprimer
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Confirmation de suppression des doublons */}
-      <AlertDialog open={showDuplicatesConfirm} onOpenChange={setShowDuplicatesConfirm}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Nettoyage des doublons</AlertDialogTitle>
-            <AlertDialogDescription>
-              Êtes-vous sûr de vouloir supprimer tous les doublons de la base de données ? Cette action est irréversible.
-              {duplicatesCount > 0 && (
-                <p className="mt-2 font-semibold">Nombre de doublons détectés : {duplicatesCount}</p>
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Annuler</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDuplicatesClean}>
-              Nettoyer les doublons
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Dialog pour afficher les références de pièces */}
-      {selectedApplianceForParts && (
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      
+      {/* Dialog pour afficher les références de pièces compatibles */}
+      {currentAppliance && (
         <PartReferencesDialog
-          open={showPartRefsDialog}
-          onOpenChange={setShowPartRefsDialog}
-          applianceId={selectedApplianceForParts.id}
-          applianceReference={selectedApplianceForParts.reference}
-          getPartReferencesForAppliance={getPartReferencesForAppliance}
+          open={partReferencesOpen}
+          onOpenChange={setPartReferencesOpen}
+          applianceId={currentAppliance.id}
+          applianceReference={currentAppliance.reference}
+          knownPartReferences={knownPartReferences || []}
+          getPartReferencesForAppliance={(id) => getPartReferencesForAppliance ? getPartReferencesForAppliance(id) : []}
+          associateAppliancesToPartReference={(ids, partRef) => associateAppliancesToPartReference ? associateAppliancesToPartReference(ids, partRef) : 0}
         />
       )}
     </div>

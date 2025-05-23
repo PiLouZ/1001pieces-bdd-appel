@@ -25,16 +25,24 @@ export function exportAppliances(appliances: Appliance[], options: ExportOptions
     
     // Add each appliance as a row
     safeAppliances.forEach(appliance => {
+      if (!appliance) return;
+      
+      // Handle potential undefined values with safe defaults
+      const reference = appliance.reference || "";
+      const commercialRef = appliance.commercialRef || "";
+      const brand = appliance.brand || "";
+      const type = appliance.type || "";
+      
       // Create the model field by concatenating reference and commercialRef
-      const model = `${appliance.reference}${appliance.commercialRef ? " - " + appliance.commercialRef : ""}`;
+      const model = `${reference}${commercialRef ? " - " + commercialRef : ""}`;
       
       const row = [
         partReference || "",
-        appliance.type || "",
-        appliance.brand || "",
+        type,
+        brand,
         model,
-        appliance.reference,
-        appliance.commercialRef || ""
+        reference,
+        commercialRef
       ];
       
       csv += row.join("\t") + "\n";
@@ -60,15 +68,23 @@ export function exportAppliances(appliances: Appliance[], options: ExportOptions
     // Add data rows
     html += '<tbody>';
     safeAppliances.forEach(appliance => {
-      const model = `${appliance.reference}${appliance.commercialRef ? " - " + appliance.commercialRef : ""}`;
+      if (!appliance) return;
+      
+      // Handle potential undefined values with safe defaults
+      const reference = appliance.reference || "";
+      const commercialRef = appliance.commercialRef || "";
+      const brand = appliance.brand || "";
+      const type = appliance.type || "";
+      
+      const model = `${reference}${commercialRef ? " - " + commercialRef : ""}`;
       
       html += '<tr>';
       html += `<td>${partReference || ""}</td>`;
-      html += `<td>${appliance.type || ""}</td>`;
-      html += `<td>${appliance.brand || ""}</td>`;
+      html += `<td>${type}</td>`;
+      html += `<td>${brand}</td>`;
       html += `<td>${model}</td>`;
-      html += `<td>${appliance.reference}</td>`;
-      html += `<td>${appliance.commercialRef || ""}</td>`;
+      html += `<td>${reference}</td>`;
+      html += `<td>${commercialRef}</td>`;
       html += '</tr>';
     });
     html += '</tbody></table>';
@@ -96,4 +112,18 @@ export function downloadCSV(csvContent: string, fileName: string = "export") {
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
+}
+
+/**
+ * Generates a CSV file without downloading it immediately
+ * Returns an object with the URL and file name for later use
+ */
+export function generateCSVFile(csvContent: string, fileName: string = "export"): {url: string, fileName: string} {
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  
+  return {
+    url,
+    fileName: `${fileName}.csv`
+  };
 }
