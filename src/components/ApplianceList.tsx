@@ -214,6 +214,12 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
     return getPartReferencesForAppliance ? getPartReferencesForAppliance(applianceId).length : 0;
   };
 
+  const handleSelectAllChange = (checked: boolean | "indeterminate") => {
+    if (onSelectAll && typeof checked === "boolean") {
+      onSelectAll(checked);
+    }
+  };
+
   return (
     <div className="space-y-4">
       {appliances.length === 0 ? (
@@ -243,11 +249,8 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
               {onToggleSelection && (
                 <TableHead className="w-10">
                   <Checkbox 
-                    checked={allSelected}
-                    ref={(input) => {
-                      if (input) input.indeterminate = someSelected;
-                    }}
-                    onCheckedChange={onSelectAll}
+                    checked={allSelected ? true : someSelected ? "indeterminate" : false}
+                    onCheckedChange={handleSelectAllChange}
                     disabled={!appliances.length} 
                   />
                 </TableHead>

@@ -308,7 +308,7 @@ const Appliances: React.FC = () => {
                 <Checkbox 
                   id="allow-new-value"
                   checked={allowNewValue}
-                  onCheckedChange={setAllowNewValue}
+                  onCheckedChange={(checked) => setAllowNewValue(checked === true)}
                 />
                 <Label htmlFor="allow-new-value">Créer une nouvelle valeur</Label>
               </div>
