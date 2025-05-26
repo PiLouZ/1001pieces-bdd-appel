@@ -1,4 +1,3 @@
-
 import React from "react";
 import { Card } from "@/components/ui/card";
 import Navigation from "@/components/Navigation";
@@ -35,7 +34,7 @@ const Import: React.FC = () => {
       
       console.log("Import demandé:", { appliancesToImport: safeAppliancesToImport, partReference });
       
-      // Importer les nouveaux appareils
+      // Importer les nouveaux appareils d'abord
       const importedCount = importAppliances(safeAppliancesToImport);
       console.log("Nombre d'appareils nouvellement importés:", importedCount);
       
@@ -43,29 +42,24 @@ const Import: React.FC = () => {
       if (partReference && partReference.trim()) {
         console.log("Association à la référence de pièce:", partReference);
         
-        // Récupérer les IDs de tous les appareils mentionnés dans l'import
+        // Pour chaque appareil dans la liste d'import, trouver l'ID correct dans la base
         const allApplianceIds: string[] = [];
         
         safeAppliancesToImport.forEach(importedAppliance => {
-          console.log("Traitement de l'appareil importé:", importedAppliance.reference);
+          console.log("Recherche de l'appareil dans la base:", importedAppliance.reference);
           
-          // Chercher l'appareil existant par référence dans la base actuelle
-          const existingAppliance = getApplianceByReference(importedAppliance.reference);
+          // Chercher l'appareil dans la base de données actuelle (après import)
+          const existingAppliance = safeAllAppliances.find(a => a.reference === importedAppliance.reference);
           
           if (existingAppliance) {
-            // Appareil existant - utiliser son ID
+            // Utiliser l'ID de l'appareil existant dans la base
             allApplianceIds.push(existingAppliance.id);
-            console.log("Appareil existant trouvé:", {
+            console.log("Appareil trouvé dans la base:", {
               reference: importedAppliance.reference,
               existingId: existingAppliance.id
             });
           } else {
-            // Nouvel appareil - utiliser l'ID de l'appareil importé
-            allApplianceIds.push(importedAppliance.id);
-            console.log("Nouvel appareil:", {
-              reference: importedAppliance.reference,
-              newId: importedAppliance.id
-            });
+            console.warn("Appareil non trouvé dans la base après import:", importedAppliance.reference);
           }
         });
         
@@ -78,12 +72,12 @@ const Import: React.FC = () => {
           console.log("Nombre d'associations créées:", associatedCount);
           
           if (importedCount === 0) {
-            toast(`Aucun nouvel appareil importé, mais ${associatedCount} appareils associés à la référence de pièce ${partReference}`);
+            toast(`Aucun nouvel appareil importé, mais ${allApplianceIds.length} appareils associés à la référence de pièce ${partReference}`);
           } else {
-            toast(`${importedCount} nouveaux appareils importés et ${associatedCount} appareils associés à la référence de pièce ${partReference}`);
+            toast(`${importedCount} nouveaux appareils importés et ${allApplianceIds.length} appareils associés à la référence de pièce ${partReference}`);
           }
         } else {
-          console.warn("Aucun appareil à associer trouvé");
+          console.warn("Aucun appareil trouvé pour l'association");
           toast("Erreur: Aucun appareil trouvé pour l'association");
         }
       } else {

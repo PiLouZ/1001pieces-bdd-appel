@@ -296,6 +296,15 @@ export const useAppliances = () => {
   const associateApplicancesToPartReference = (applianceIds: string[], partReference: string) => {
     console.log("Association demandée:", { applianceIds, partReference });
     
+    // Vérifier que les appareils existent dans la base
+    const validIds = applianceIds.filter(id => appliances.find(app => app.id === id));
+    console.log("IDs valides trouvés:", validIds);
+    
+    if (validIds.length === 0) {
+      console.warn("Aucun appareil valide trouvé pour l'association");
+      return 0;
+    }
+    
     // Sauvegarder la référence de pièce si elle n'existe pas déjà
     if (!knownPartReferences.includes(partReference)) {
       const updatedRefs = [...knownPartReferences, partReference];
@@ -304,7 +313,7 @@ export const useAppliances = () => {
     }
     
     // Créer de nouvelles associations
-    const newAssociations: AppliancePartAssociation[] = applianceIds.map(id => ({
+    const newAssociations: AppliancePartAssociation[] = validIds.map(id => ({
       id: `${id}-${partReference}-${Date.now()}`,
       applianceId: id,
       partReference,
@@ -323,7 +332,7 @@ export const useAppliances = () => {
       return [...prev, ...filteredNewAssocs];
     });
     
-    return applianceIds.length;
+    return validIds.length;
   };
 
   // Supprimer une association entre un appareil et une référence de pièce

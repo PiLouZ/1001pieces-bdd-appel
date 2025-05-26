@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -45,7 +44,8 @@ const Appliances: React.FC = () => {
     knownTypes,
     knownPartReferences,
     getPartReferencesForAppliance,
-    associateApplicancesToPartReference
+    associateApplicancesToPartReference,
+    removeAppliancePartAssociation
   } = useAppliances();
 
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -179,6 +179,11 @@ const Appliances: React.FC = () => {
     setNewPartRef("");
   };
 
+  const handleRemoveAssociation = (applianceId: string, partRef: string) => {
+    removeAppliancePartAssociation(applianceId, partRef);
+    toast(`Association avec la référence "${partRef}" supprimée`);
+  };
+
   return (
     <div className="flex flex-col min-h-screen">
       <Navigation />
@@ -267,6 +272,7 @@ const Appliances: React.FC = () => {
           knownPartReferences={knownPartReferences || []}
           getPartReferencesForAppliance={(id) => getPartReferencesForAppliance ? getPartReferencesForAppliance(id) : []}
           associateAppliancesToPartReference={(ids, partRef) => associateApplicancesToPartReference ? associateApplicancesToPartReference(ids, partRef) : 0}
+          onRemoveAssociation={handleRemoveAssociation}
         />
         
         {/* Dialogue de modification */}
