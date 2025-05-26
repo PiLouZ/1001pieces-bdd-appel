@@ -61,6 +61,7 @@ const Appliances: React.FC = () => {
   const [associateDialogOpen, setAssociateDialogOpen] = useState(false);
   const [selectedPartRef, setSelectedPartRef] = useState("");
   const [newPartRef, setNewPartRef] = useState("");
+  const [allowNewValue, setAllowNewValue] = useState(false);
 
   useEffect(() => {
     const count = Object.keys(selectedAppliances).filter(id => selectedAppliances[id]).length;
@@ -68,6 +69,8 @@ const Appliances: React.FC = () => {
   }, [selectedAppliances]);
 
   const hasSelection = selectedCount > 0;
+  const allSelected = appliances.length > 0 && selectedCount === appliances.length;
+  const someSelected = selectedCount > 0 && selectedCount < appliances.length;
 
   const handleEdit = (appliance: Appliance) => {
     setCurrentAppliance(appliance);
@@ -78,9 +81,7 @@ const Appliances: React.FC = () => {
     updateAppliance(appliance);
     setEditDialogOpen(false);
     setCurrentAppliance(null);
-    toast("Succès", {
-      description: "Appareil mis à jour avec succès"
-    });
+    toast("Appareil mis à jour avec succès");
   };
 
   const handleDelete = (id: string) => {
@@ -97,14 +98,10 @@ const Appliances: React.FC = () => {
         }
       });
       setSelectedAppliances({});
-      toast("Succès", {
-        description: `${selectedCount} appareils supprimés`
-      });
+      toast(`${selectedCount} appareils supprimés`);
     } else if (currentAppliance) {
       deleteAppliance(currentAppliance.id);
-      toast("Succès", {
-        description: "Appareil supprimé avec succès"
-      });
+      toast("Appareil supprimé avec succès");
     }
     setDeleteDialogOpen(false);
     setCurrentAppliance(null);
@@ -117,8 +114,22 @@ const Appliances: React.FC = () => {
     }));
   };
 
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      const newSelection: ApplianceSelection = {};
+      appliances.forEach(appliance => {
+        newSelection[appliance.id] = true;
+      });
+      setSelectedAppliances(newSelection);
+    } else {
+      setSelectedAppliances({});
+    }
+  };
+
   const handleUpdateSelection = (field: "brand" | "type") => {
     setUpdateField(field);
+    setUpdateValue("");
+    setAllowNewValue(false);
     setUpdateSelectionDialogOpen(true);
   };
 
@@ -137,9 +148,7 @@ const Appliances: React.FC = () => {
         }
       });
       
-      toast("Succès", {
-        description: `${ids.length} appareils mis à jour avec succès`
-      });
+      toast(`${ids.length} appareils mis à jour avec succès`);
     }
     
     setUpdateSelectionDialogOpen(false);
@@ -151,98 +160,6 @@ const Appliances: React.FC = () => {
     setDeleteDialogOpen(true);
   };
 
-  const handleStartEdit = (id: string, field: string, value: string) => {
-    setEditableFields(prev => ({
-      ...prev,
-      [id]: {
-        ...prev[id],
-        [field]: {
-          value,
-          isEditing: true
-        }
-      }
-    }));
-  };
-
-  const handleEditChange = (id: string, field: string, value: string) => {
-    setEditableFields(prev => ({
-      ...prev,
-      [id]: {
-        ...prev[id],
-        [field]: {
-          ...prev[id]?.[field],
-          value
-        }
-      }
-    }));
-  };
-
-  const handleSave = (id: string, field: string) => {
-    const value = editableFields[id]?.[field]?.value || "";
-    const updatedAppliance = { ...appliances.find(app => app.id === id), [field]: value };
-    updateAppliance(updatedAppliance as Appliance);
-    setEditableFields(prev => ({
-      ...prev,
-      [id]: {
-        ...prev[id],
-        [field]: {
-          value,
-          isEditing: false
-        }
-      }
-    }));
-  };
-
-  const handleCancel = (id: string, field: string) => {
-    setEditableFields(prev => ({
-      ...prev,
-      [id]: {
-        ...prev[id],
-        [field]: {
-          ...prev[id]?.[field],
-          isEditing: false
-        }
-      }
-    }));
-  };
-
-  const SearchBar = ({ value, onChange, knownBrands, knownTypes }: { value: string, onChange: (value: string) => void, knownBrands: string[], knownTypes: string[] }) => (
-    <div className="flex flex-col space-y-2">
-      <Input
-        type="search"
-        placeholder="Rechercher par référence, marque ou type..."
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      />
-      <div className="flex space-x-2">
-        {knownBrands.length > 0 && (
-          <Card>
-            <CardHeader className="py-2 px-4">
-              <CardTitle className="text-sm">Marques ({knownBrands.length})</CardTitle>
-            </CardHeader>
-            <CardContent className="h-32 overflow-auto py-2 px-4">
-              {knownBrands.map(brand => (
-                <div key={brand} className="text-sm">{brand}</div>
-              ))}
-            </CardContent>
-          </Card>
-        )}
-        {knownTypes.length > 0 && (
-          <Card>
-            <CardHeader className="py-2 px-4">
-              <CardTitle className="text-sm">Types ({knownTypes.length})</CardTitle>
-            </CardHeader>
-            <CardContent className="h-32 overflow-auto py-2 px-4">
-              {knownTypes.map(type => (
-                <div key={type} className="text-sm">{type}</div>
-              ))}
-            </CardContent>
-          </Card>
-        )}
-      </div>
-    </div>
-  );
-
   const handleAssociateToPartRef = () => {
     setAssociateDialogOpen(true);
   };
@@ -253,9 +170,7 @@ const Appliances: React.FC = () => {
 
     if (ids.length > 0 && partRef) {
       associateApplicancesToPartReference(ids, partRef);
-      toast("Succès", {
-        description: `${ids.length} appareils associés à la référence ${partRef}`
-      });
+      toast(`${ids.length} appareils associés à la référence ${partRef}`);
     }
 
     setAssociateDialogOpen(false);
@@ -287,16 +202,19 @@ const Appliances: React.FC = () => {
           </div>
         </div>
         
-        {/* Recherche et filtres */}
-        <SearchBar 
-          value={searchQuery} 
-          onChange={setSearchQuery} 
-          knownBrands={knownBrands || []} 
-          knownTypes={knownTypes || []} 
-        />
+        {/* Recherche uniquement */}
+        <div className="mb-4">
+          <Input
+            type="search"
+            placeholder="Référence d'appareil ou de pièce, marque, type..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="max-w-md"
+          />
+        </div>
         
         {/* Zone d'actions groupées */}
-        <div className="mb-4 mt-4">
+        <div className="mb-4">
           {hasSelection && (
             <div className="bg-gray-50 p-4 rounded-md border flex flex-wrap gap-2 items-center">
               <span className="text-sm font-medium mr-2">{selectedCount} appareils sélectionnés</span>
@@ -342,7 +260,10 @@ const Appliances: React.FC = () => {
           onEdit={handleEdit}
           onDelete={handleDelete}
           onToggleSelection={handleToggleSelection}
+          onSelectAll={handleSelectAll}
           selectedAppliances={selectedAppliances}
+          allSelected={allSelected}
+          someSelected={someSelected}
           knownPartReferences={knownPartReferences || []}
           getPartReferencesForAppliance={(id) => getPartReferencesForAppliance ? getPartReferencesForAppliance(id) : []}
           associateAppliancesToPartReference={(ids, partRef) => associateApplicancesToPartReference ? associateApplicancesToPartReference(ids, partRef) : 0}
@@ -383,34 +304,59 @@ const Appliances: React.FC = () => {
               </DialogTitle>
             </DialogHeader>
             <div className="space-y-4 py-4">
+              <div className="flex items-center space-x-2">
+                <Checkbox 
+                  id="allow-new-value"
+                  checked={allowNewValue}
+                  onCheckedChange={setAllowNewValue}
+                />
+                <Label htmlFor="allow-new-value">Créer une nouvelle valeur</Label>
+              </div>
+              
               {updateField === "brand" && (
                 <>
                   <Label htmlFor="brand">Marque</Label>
-                  <Select value={updateValue} onValueChange={setUpdateValue}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Sélectionner une marque" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {knownBrands && knownBrands.map(brand => (
-                        <SelectItem key={brand} value={brand}>{brand}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  {allowNewValue ? (
+                    <Input
+                      value={updateValue}
+                      onChange={(e) => setUpdateValue(e.target.value)}
+                      placeholder="Nouvelle marque"
+                    />
+                  ) : (
+                    <Select value={updateValue} onValueChange={setUpdateValue}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Sélectionner une marque" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {knownBrands && knownBrands.map(brand => (
+                          <SelectItem key={brand} value={brand}>{brand}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                 </>
               )}
               {updateField === "type" && (
                 <>
                   <Label htmlFor="type">Type</Label>
-                  <Select value={updateValue} onValueChange={setUpdateValue}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Sélectionner un type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {knownTypes && knownTypes.map(type => (
-                        <SelectItem key={type} value={type}>{type}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  {allowNewValue ? (
+                    <Input
+                      value={updateValue}
+                      onChange={(e) => setUpdateValue(e.target.value)}
+                      placeholder="Nouveau type"
+                    />
+                  ) : (
+                    <Select value={updateValue} onValueChange={setUpdateValue}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Sélectionner un type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {knownTypes && knownTypes.map(type => (
+                          <SelectItem key={type} value={type}>{type}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                 </>
               )}
             </div>

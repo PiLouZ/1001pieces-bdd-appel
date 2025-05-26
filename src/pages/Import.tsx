@@ -11,7 +11,7 @@ import { Appliance } from "@/types/appliance";
 const Import: React.FC = () => {
   const { 
     importAppliances, 
-    knownBrands = [], // Provide default empty arrays
+    knownBrands = [], 
     knownTypes = [], 
     knownPartReferences = [],
     allAppliances = [],
@@ -20,7 +20,6 @@ const Import: React.FC = () => {
     suggestType
   } = useAppliances();
 
-  // Ensure we always have valid arrays even if the hook returns undefined
   const safeKnownBrands = Array.isArray(knownBrands) ? knownBrands : [];
   const safeKnownTypes = Array.isArray(knownTypes) ? knownTypes : [];
   const safeKnownPartReferences = Array.isArray(knownPartReferences) ? knownPartReferences : [];
@@ -30,31 +29,44 @@ const Import: React.FC = () => {
     return safeAllAppliances.find(a => a.reference === ref);
   };
 
-  const handleImport = (appliancesToImport: Appliance[]): Appliance[] => {
+  const handleImport = (appliancesToImport: Appliance[], partReference?: string): Appliance[] => {
     try {
-      // Ensure we have a valid array to import
       const safeAppliancesToImport = Array.isArray(appliancesToImport) ? appliancesToImport : [];
       
       const count = importAppliances(safeAppliancesToImport);
 
-      if (count === 0) {
-        toast("Information", {
-          description: "Aucun nouvel appareil à importer (références déjà présentes dans la base de données)"
+      // Si une référence de pièce est fournie, associer TOUS les appareils (nouveaux ET existants)
+      if (partReference && partReference.trim()) {
+        // Récupérer les IDs de tous les appareils (nouveaux et existants)
+        const allApplianceIds = safeAppliancesToImport.map(appliance => {
+          const existingAppliance = getApplianceByReference(appliance.reference);
+          return existingAppliance ? existingAppliance.id : appliance.id;
         });
+        
+        // Associer tous ces appareils à la référence de pièce
+        const associatedCount = associateApplicancesToPartReference(allApplianceIds, partReference);
+        
+        if (count === 0) {
+          toast(`Aucun nouvel appareil importé, mais ${associatedCount} appareils associés à la référence de pièce ${partReference}`);
+        } else {
+          toast(`${count} nouveaux appareils importés et ${associatedCount} appareils associés à la référence de pièce ${partReference}`);
+        }
+      } else {
+        if (count === 0) {
+          toast("Aucun nouvel appareil à importer (références déjà présentes dans la base de données)");
+        } else {
+          toast(`${count} nouveaux appareils importés avec succès`);
+        }
       }
 
-      // Retournons les appareils importés pour pouvoir les associer à une référence par la suite
       return safeAppliancesToImport;
     } catch (error) {
-      toast("Erreur d'importation", {
-        description: "Une erreur est survenue lors de l'importation des données"
-      });
+      toast("Une erreur est survenue lors de l'importation des données");
       console.error("Import error:", error);
       return [];
     }
   };
 
-  // Wrap the associateApplicancesToPartReference function to ensure it handles undefined properly
   const safeAssociateAppliancesToPartReference = (applianceIds: string[], partReference: string) => {
     if (!Array.isArray(applianceIds) || !partReference) {
       console.warn("Invalid parameters for associateApplicancesToPartReference");
@@ -63,13 +75,11 @@ const Import: React.FC = () => {
     return associateApplicancesToPartReference(applianceIds, partReference);
   };
 
-  // Wrap the suggestBrand function to handle potential undefined
   const safeSuggestBrand = (reference: string): string | null => {
     if (!reference || typeof suggestBrand !== 'function') return null;
     return suggestBrand(reference);
   };
 
-  // Wrap the suggestType function to handle potential undefined
   const safeSuggestType = (reference: string, brand: string): string | null => {
     if (!reference || !brand || typeof suggestType !== 'function') return null;
     return suggestType(reference, brand);

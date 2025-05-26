@@ -12,28 +12,32 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const Export: React.FC = () => {
-  // Get appliances data with safe fallbacks
   const { 
     appliances: allAppliances = [], 
     knownPartReferences = [],
+    knownBrands = [],
+    knownTypes = [],
     getAppliancesByPartReference = () => []
   } = useAppliances();
   
   const [selectedFormat, setSelectedFormat] = useState<"csv" | "html" | "json">("csv");
   const [includeHeader, setIncludeHeader] = useState(true);
   const [selectedPartReference, setSelectedPartReference] = useState("");
-  const [exportType, setExportType] = useState<"all" | "by-part-reference">("all");
+  const [exportType, setExportType] = useState<"all" | "by-part-reference" | "by-brand-type">("all");
   const [searchPartRef, setSearchPartRef] = useState(""); 
+  const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
+  const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
+  const [searchBrand, setSearchBrand] = useState("");
+  const [searchType, setSearchType] = useState("");
 
-  // Make sure we have valid appliances
   const safeAppliances = Array.isArray(allAppliances) ? allAppliances : [];
-  
-  // Initialize an empty array for part references if it's undefined
   const safePartReferences = Array.isArray(knownPartReferences) ? knownPartReferences : [];
+  const safeBrands = Array.isArray(knownBrands) ? knownBrands : [];
+  const safeTypes = Array.isArray(knownTypes) ? knownTypes : [];
   
-  // Filtrer les références de pièce selon la recherche
   const filteredPartReferences = React.useMemo(() => {
     if (!searchPartRef || !Array.isArray(safePartReferences)) return safePartReferences;
     
@@ -41,8 +45,23 @@ const Export: React.FC = () => {
       ref && typeof ref === 'string' && ref.toLowerCase().includes(searchPartRef.toLowerCase())
     );
   }, [searchPartRef, safePartReferences]);
+
+  const filteredBrands = React.useMemo(() => {
+    if (!searchBrand || !Array.isArray(safeBrands)) return safeBrands;
+    
+    return safeBrands.filter(brand => 
+      brand && typeof brand === 'string' && brand.toLowerCase().includes(searchBrand.toLowerCase())
+    );
+  }, [searchBrand, safeBrands]);
+
+  const filteredTypes = React.useMemo(() => {
+    if (!searchType || !Array.isArray(safeTypes)) return safeTypes;
+    
+    return safeTypes.filter(type => 
+      type && typeof type === 'string' && type.toLowerCase().includes(searchType.toLowerCase())
+    );
+  }, [searchType, safeTypes]);
   
-  // Ensure getCompatibleAppliances always returns an array
   const getCompatibleAppliances = (partRef: string) => {
     if (!getAppliancesByPartReference || !partRef) return [];
     try {
@@ -53,13 +72,40 @@ const Export: React.FC = () => {
       return [];
     }
   };
+
+  const getAppliancesByBrandAndType = () => {
+    return safeAppliances.filter(appliance => {
+      const brandMatch = selectedBrands.length === 0 || selectedBrands.includes(appliance.brand);
+      const typeMatch = selectedTypes.length === 0 || selectedTypes.includes(appliance.type);
+      return brandMatch && typeMatch;
+    });
+  };
+
+  const handleBrandToggle = (brand: string) => {
+    setSelectedBrands(prev => 
+      prev.includes(brand) 
+        ? prev.filter(b => b !== brand)
+        : [...prev, brand]
+    );
+  };
+
+  const handleTypeToggle = (type: string) => {
+    setSelectedTypes(prev => 
+      prev.includes(type) 
+        ? prev.filter(t => t !== type)
+        : [...prev, type]
+    );
+  };
   
   const handleExport = () => {
     try {
       if (exportType === "by-part-reference" && !selectedPartReference) {
-        toast("Erreur", {
-          description: "Veuillez sélectionner une référence de pièce"
-        });
+        toast("Veuillez sélectionner une référence de pièce");
+        return;
+      }
+
+      if (exportType === "by-brand-type" && selectedBrands.length === 0 && selectedTypes.length === 0) {
+        toast("Veuillez sélectionner au moins une marque ou un type");
         return;
       }
 
@@ -67,22 +113,28 @@ const Export: React.FC = () => {
       let fileName = `export-appareils-${new Date().toISOString().split('T')[0]}`;
       
       if (exportType === "by-part-reference" && selectedPartReference) {
-        // Use the helper function to ensure we always get an array
         appliancesToExport = getCompatibleAppliances(selectedPartReference);
         fileName = `export-appareils-compatibles-${selectedPartReference}-${new Date().toISOString().split('T')[0]}`;
         
         if (appliancesToExport.length === 0) {
-          toast("Information", {
-            description: "Aucun appareil n'est compatible avec cette référence de pièce"
-          });
+          toast("Aucun appareil n'est compatible avec cette référence de pièce");
+          return;
+        }
+      } else if (exportType === "by-brand-type") {
+        appliancesToExport = getAppliancesByBrandAndType();
+        const brandPart = selectedBrands.length > 0 ? `marques-${selectedBrands.join('-')}` : '';
+        const typePart = selectedTypes.length > 0 ? `types-${selectedTypes.join('-')}` : '';
+        const filterPart = [brandPart, typePart].filter(Boolean).join('-');
+        fileName = `export-appareils-${filterPart}-${new Date().toISOString().split('T')[0]}`;
+        
+        if (appliancesToExport.length === 0) {
+          toast("Aucun appareil ne correspond aux critères sélectionnés");
           return;
         }
       }
       
       if (appliancesToExport.length === 0) {
-        toast("Information", {
-          description: "Aucun appareil à exporter"
-        });
+        toast("Aucun appareil à exporter");
         return;
       }
       
@@ -94,9 +146,7 @@ const Export: React.FC = () => {
         });
         downloadCSV(csvContent, fileName);
         
-        toast("Exportation réussie", {
-          description: `${appliancesToExport.length} appareils ont été exportés au format CSV`
-        });
+        toast(`${appliancesToExport.length} appareils ont été exportés au format CSV`);
       } else if (selectedFormat === "html") {
         const htmlContent = exportAppliances(appliancesToExport, { 
           format: "html",
@@ -114,9 +164,7 @@ const Export: React.FC = () => {
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
         
-        toast("Exportation réussie", {
-          description: `${appliancesToExport.length} appareils ont été exportés au format HTML`
-        });
+        toast(`${appliancesToExport.length} appareils ont été exportés au format HTML`);
       } else {
         const jsonContent = exportAppliances(appliancesToExport, { 
           format: "json",
@@ -133,14 +181,10 @@ const Export: React.FC = () => {
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
         
-        toast("Exportation réussie", {
-          description: `${appliancesToExport.length} appareils ont été exportés au format JSON`
-        });
+        toast(`${appliancesToExport.length} appareils ont été exportés au format JSON`);
       }
     } catch (error) {
-      toast("Erreur d'exportation", {
-        description: "Une erreur est survenue lors de l'exportation"
-      });
+      toast("Une erreur est survenue lors de l'exportation");
       console.error("Export error:", error);
     }
   };
@@ -166,7 +210,7 @@ const Export: React.FC = () => {
                 <RadioGroup 
                   defaultValue="all" 
                   value={exportType} 
-                  onValueChange={(value) => setExportType(value as "all" | "by-part-reference")}
+                  onValueChange={(value) => setExportType(value as "all" | "by-part-reference" | "by-brand-type")}
                   className="space-y-2"
                 >
                   <div className="flex items-center space-x-2">
@@ -176,6 +220,10 @@ const Export: React.FC = () => {
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="by-part-reference" id="by-part-reference" />
                     <Label htmlFor="by-part-reference">Par référence de pièce</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="by-brand-type" id="by-brand-type" />
+                    <Label htmlFor="by-brand-type">Par marque et/ou type</Label>
                   </div>
                 </RadioGroup>
                 
@@ -204,6 +252,56 @@ const Export: React.FC = () => {
                           </option>
                         ))}
                       </select>
+                    </div>
+                  </div>
+                )}
+
+                {exportType === "by-brand-type" && (
+                  <div className="mt-4 pl-6 space-y-4">
+                    <div>
+                      <Label>Marques</Label>
+                      <Input 
+                        type="text"
+                        placeholder="Rechercher une marque..." 
+                        value={searchBrand}
+                        onChange={(e) => setSearchBrand(e.target.value)}
+                        className="mb-2"
+                      />
+                      <div className="max-h-32 overflow-y-auto border rounded p-2 space-y-2">
+                        {filteredBrands.map((brand) => (
+                          <div key={brand} className="flex items-center space-x-2">
+                            <Checkbox
+                              id={`brand-${brand}`}
+                              checked={selectedBrands.includes(brand)}
+                              onCheckedChange={() => handleBrandToggle(brand)}
+                            />
+                            <Label htmlFor={`brand-${brand}`} className="text-sm">{brand}</Label>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <Label>Types</Label>
+                      <Input 
+                        type="text"
+                        placeholder="Rechercher un type..." 
+                        value={searchType}
+                        onChange={(e) => setSearchType(e.target.value)}
+                        className="mb-2"
+                      />
+                      <div className="max-h-32 overflow-y-auto border rounded p-2 space-y-2">
+                        {filteredTypes.map((type) => (
+                          <div key={type} className="flex items-center space-x-2">
+                            <Checkbox
+                              id={`type-${type}`}
+                              checked={selectedTypes.includes(type)}
+                              onCheckedChange={() => handleTypeToggle(type)}
+                            />
+                            <Label htmlFor={`type-${type}`} className="text-sm">{type}</Label>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -270,7 +368,7 @@ const Export: React.FC = () => {
                       )}
                     </p>
                   </div>
-                ) : (
+                ) : exportType === "by-part-reference" ? (
                   <div className="flex flex-col items-center justify-center h-full">
                     <FileText className="h-10 w-10 text-gray-400 mb-2" />
                     <p className="text-center text-gray-500">
@@ -284,6 +382,31 @@ const Export: React.FC = () => {
                         )
                       )}
                     </p>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full">
+                    <FileText className="h-10 w-10 text-gray-400 mb-2" />
+                    <p className="text-center text-gray-500">
+                      {selectedBrands.length === 0 && selectedTypes.length === 0 ? (
+                        "Sélectionnez au moins une marque ou un type"
+                      ) : (
+                        getAppliancesByBrandAndType().length === 0 ? (
+                          "Aucun appareil ne correspond aux critères"
+                        ) : (
+                          `${getAppliancesByBrandAndType().length} appareils seront exportés`
+                        )
+                      )}
+                    </p>
+                    {(selectedBrands.length > 0 || selectedTypes.length > 0) && (
+                      <div className="mt-2 text-sm text-gray-600">
+                        {selectedBrands.length > 0 && (
+                          <p>Marques: {selectedBrands.join(', ')}</p>
+                        )}
+                        {selectedTypes.length > 0 && (
+                          <p>Types: {selectedTypes.join(', ')}</p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

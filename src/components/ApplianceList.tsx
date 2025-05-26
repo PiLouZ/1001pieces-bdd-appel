@@ -10,7 +10,10 @@ import {
   Settings2,
   Check,
   X,
-  Tag
+  Tag,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown
 } from "lucide-react";
 import {
   Table,
@@ -31,15 +34,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import PartReferencesDialog from "./PartReferencesDialog";
 
 interface ApplianceListProps {
@@ -47,51 +41,108 @@ interface ApplianceListProps {
   onEdit: (appliance: Appliance) => void;
   onDelete: (id: string) => void;
   onToggleSelection?: (id: string, selected: boolean) => void;
+  onSelectAll?: (selected: boolean) => void;
   selectedAppliances?: ApplianceSelection;
+  allSelected?: boolean;
+  someSelected?: boolean;
   knownPartReferences?: string[];
   getPartReferencesForAppliance?: (id: string) => string[];
   associateAppliancesToPartReference?: (ids: string[], partRef: string) => number;
 }
+
+type SortField = "reference" | "commercialRef" | "brand" | "type";
+type SortDirection = "asc" | "desc" | null;
 
 const ApplianceList: React.FC<ApplianceListProps> = ({ 
   appliances, 
   onEdit, 
   onDelete, 
   onToggleSelection,
+  onSelectAll,
   selectedAppliances = {},
+  allSelected = false,
+  someSelected = false,
   knownPartReferences = [],
   getPartReferencesForAppliance,
   associateAppliancesToPartReference
 }) => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [deleteMultiple, setDeleteMultiple] = useState(false);
   const [applianceToDelete, setApplianceToDelete] = useState<string | null>(null);
   const [editableFields, setEditableFields] = useState<Record<string, { brand?: ApplianceEditable; type?: ApplianceEditable }>>({});
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [currentAppliance, setCurrentAppliance] = useState<Appliance | null>(null);
-  const [updateSelectionDialogOpen, setUpdateSelectionDialogOpen] = useState(false);
-  const [updateField, setUpdateField] = useState<"brand" | "type" | null>(null);
-  const [updateValue, setUpdateValue] = useState("");
-  const [associateDialogOpen, setAssociateDialogOpen] = useState(false);
-  const [selectedPartRef, setSelectedPartRef] = useState("");
-  const [newPartRef, setNewPartRef] = useState("");
   const [partReferencesOpen, setPartReferencesOpen] = useState(false);
+  const [sortField, setSortField] = useState<SortField | null>(null);
+  const [sortDirection, setSortDirection] = useState<SortDirection>(null);
 
-  const hasSelection = useMemo(() => Object.keys(selectedAppliances).some(key => selectedAppliances[key]), [selectedAppliances]);
-  const selectedCount = useMemo(() => Object.keys(selectedAppliances).filter(key => selectedAppliances[key]).length, [selectedAppliances]);
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      if (sortDirection === "asc") {
+        setSortDirection("desc");
+      } else if (sortDirection === "desc") {
+        setSortField(null);
+        setSortDirection(null);
+      } else {
+        setSortDirection("asc");
+      }
+    } else {
+      setSortField(field);
+      setSortDirection("asc");
+    }
+  };
+
+  const getSortIcon = (field: SortField) => {
+    if (sortField !== field) {
+      return <ArrowUpDown className="h-4 w-4" />;
+    }
+    if (sortDirection === "asc") {
+      return <ArrowUp className="h-4 w-4" />;
+    }
+    if (sortDirection === "desc") {
+      return <ArrowDown className="h-4 w-4" />;
+    }
+    return <ArrowUpDown className="h-4 w-4" />;
+  };
 
   const sortedAppliances = useMemo(() => {
-    return [...appliances].sort((a, b) => a.reference.localeCompare(b.reference));
-  }, [appliances]);
+    let sorted = [...appliances];
+    
+    if (sortField && sortDirection) {
+      sorted.sort((a, b) => {
+        let aValue = "";
+        let bValue = "";
+        
+        switch (sortField) {
+          case "reference":
+            aValue = a.reference || "";
+            bValue = b.reference || "";
+            break;
+          case "commercialRef":
+            aValue = a.commercialRef || "";
+            bValue = b.commercialRef || "";
+            break;
+          case "brand":
+            aValue = a.brand || "";
+            bValue = b.brand || "";
+            break;
+          case "type":
+            aValue = a.type || "";
+            bValue = b.type || "";
+            break;
+        }
+        
+        const comparison = aValue.localeCompare(bValue);
+        return sortDirection === "asc" ? comparison : -comparison;
+      });
+    } else {
+      // Tri par défaut par référence
+      sorted.sort((a, b) => a.reference.localeCompare(b.reference));
+    }
+    
+    return sorted;
+  }, [appliances, sortField, sortDirection]);
 
   const confirmDelete = () => {
-    if (deleteMultiple) {
-      Object.keys(selectedAppliances).forEach(id => {
-        if (selectedAppliances[id]) {
-          onDelete(id);
-        }
-      });
-    } else if (applianceToDelete) {
+    if (applianceToDelete) {
       onDelete(applianceToDelete);
     }
     setDeleteDialogOpen(false);
@@ -99,13 +150,6 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
 
   const handleDelete = (id: string) => {
     setApplianceToDelete(id);
-    setDeleteMultiple(false);
-    setDeleteDialogOpen(true);
-  };
-
-  const handleDeleteSelection = () => {
-    setApplianceToDelete(null);
-    setDeleteMultiple(true);
     setDeleteDialogOpen(true);
   };
 
@@ -166,42 +210,8 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
     }));
   };
 
-  const handleEdit = (appliance: Appliance) => {
-    setCurrentAppliance(appliance);
-    setEditDialogOpen(true);
-  };
-
-  const handleSaveEdit = (appliance: Appliance) => {
-    onEdit(appliance);
-    setEditDialogOpen(false);
-  };
-
-  const handleUpdateSelection = (field: "brand" | "type") => {
-    setUpdateField(field);
-    setUpdateValue("");
-    setUpdateSelectionDialogOpen(true);
-  };
-
-  const confirmUpdateSelection = () => {
-    if (updateField && updateValue) {
-      const ids = Object.keys(selectedAppliances).filter(id => selectedAppliances[id]);
-      ids.forEach(id => {
-        onEdit({
-          ...appliances.find(app => app.id === id)!,
-          [updateField]: updateValue,
-        });
-      });
-      setUpdateSelectionDialogOpen(false);
-    }
-  };
-
-  const confirmAssociateToPartRef = () => {
-    const partRef = selectedPartRef || newPartRef;
-    if (partRef) {
-      const ids = Object.keys(selectedAppliances).filter(id => selectedAppliances[id]);
-      associateAppliancesToPartReference!(ids, partRef);
-      setAssociateDialogOpen(false);
-    }
+  const getPartReferencesCount = (applianceId: string) => {
+    return getPartReferencesForAppliance ? getPartReferencesForAppliance(applianceId).length : 0;
   };
 
   return (
@@ -232,21 +242,47 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
             <TableRow>
               {onToggleSelection && (
                 <TableHead className="w-10">
-                  <Checkbox disabled={!appliances.length} />
+                  <Checkbox 
+                    checked={allSelected}
+                    ref={(input) => {
+                      if (input) input.indeterminate = someSelected;
+                    }}
+                    onCheckedChange={onSelectAll}
+                    disabled={!appliances.length} 
+                  />
                 </TableHead>
               )}
-              <TableHead>Référence</TableHead>
-              <TableHead>Référence commerciale</TableHead>
-              <TableHead>Marque</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead>Date d'ajout</TableHead>
+              <TableHead className="cursor-pointer" onClick={() => handleSort("reference")}>
+                <div className="flex items-center gap-1">
+                  Référence
+                  {getSortIcon("reference")}
+                </div>
+              </TableHead>
+              <TableHead className="cursor-pointer" onClick={() => handleSort("commercialRef")}>
+                <div className="flex items-center gap-1">
+                  Référence commerciale
+                  {getSortIcon("commercialRef")}
+                </div>
+              </TableHead>
+              <TableHead className="cursor-pointer" onClick={() => handleSort("brand")}>
+                <div className="flex items-center gap-1">
+                  Marque
+                  {getSortIcon("brand")}
+                </div>
+              </TableHead>
+              <TableHead className="cursor-pointer" onClick={() => handleSort("type")}>
+                <div className="flex items-center gap-1">
+                  Type
+                  {getSortIcon("type")}
+                </div>
+              </TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {sortedAppliances.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={onToggleSelection ? 7 : 6} className="text-center h-24 text-muted-foreground">
+                <TableCell colSpan={onToggleSelection ? 6 : 5} className="text-center h-24 text-muted-foreground">
                   Aucune donnée
                 </TableCell>
               </TableRow>
@@ -341,11 +377,6 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
                     )}
                   </TableCell>
                   
-                  {/* Date d'ajout */}
-                  <TableCell className="text-gray-600">
-                    {new Date(appliance.dateAdded).toLocaleDateString()}
-                  </TableCell>
-                  
                   {/* Actions */}
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
@@ -356,8 +387,14 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
                           setPartReferencesOpen(true);
                           setCurrentAppliance(appliance);
                         }}
+                        className="relative"
                       >
                         <Tag className="h-4 w-4" />
+                        {getPartReferencesCount(appliance.id) > 0 && (
+                          <span className="absolute -top-1 -right-1 bg-blue-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                            {getPartReferencesCount(appliance.id)}
+                          </span>
+                        )}
                       </Button>
                       <Button
                         variant="ghost"
@@ -381,6 +418,22 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
           </TableBody>
         </Table>
       </div>
+      
+      {/* Dialog pour la confirmation de suppression */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmer la suppression</AlertDialogTitle>
+            <AlertDialogDescription>
+              Êtes-vous sûr de vouloir supprimer cet appareil ? Cette action est irréversible.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete}>Supprimer</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       
       {/* Dialog pour afficher les références de pièces compatibles */}
       {currentAppliance && (
