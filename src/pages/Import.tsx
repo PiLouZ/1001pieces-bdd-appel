@@ -35,49 +35,69 @@ const Import: React.FC = () => {
       
       console.log("Import demandé:", { appliancesToImport: safeAppliancesToImport, partReference });
       
-      const count = importAppliances(safeAppliancesToImport);
-
+      // Importer les nouveaux appareils
+      const importedCount = importAppliances(safeAppliancesToImport);
+      console.log("Nombre d'appareils nouvellement importés:", importedCount);
+      
       // Si une référence de pièce est fournie, associer TOUS les appareils (nouveaux ET existants)
       if (partReference && partReference.trim()) {
+        console.log("Association à la référence de pièce:", partReference);
+        
         // Récupérer les IDs de tous les appareils mentionnés dans l'import
         const allApplianceIds: string[] = [];
         
-        safeAppliancesToImport.forEach(appliance => {
-          // Chercher l'appareil existant par référence
-          const existingAppliance = getApplianceByReference(appliance.reference);
+        safeAppliancesToImport.forEach(importedAppliance => {
+          console.log("Traitement de l'appareil importé:", importedAppliance.reference);
+          
+          // Chercher l'appareil existant par référence dans la base actuelle
+          const existingAppliance = getApplianceByReference(importedAppliance.reference);
+          
           if (existingAppliance) {
             // Appareil existant - utiliser son ID
             allApplianceIds.push(existingAppliance.id);
-            console.log("Appareil existant trouvé:", existingAppliance.id, "pour référence:", appliance.reference);
+            console.log("Appareil existant trouvé:", {
+              reference: importedAppliance.reference,
+              existingId: existingAppliance.id
+            });
           } else {
             // Nouvel appareil - utiliser l'ID de l'appareil importé
-            allApplianceIds.push(appliance.id);
-            console.log("Nouvel appareil:", appliance.id, "pour référence:", appliance.reference);
+            allApplianceIds.push(importedAppliance.id);
+            console.log("Nouvel appareil:", {
+              reference: importedAppliance.reference,
+              newId: importedAppliance.id
+            });
           }
         });
         
-        console.log("IDs des appareils à associer:", allApplianceIds);
+        console.log("IDs finaux à associer:", allApplianceIds);
+        console.log("Nombre total d'appareils à associer:", allApplianceIds.length);
         
         // Associer tous ces appareils à la référence de pièce
-        const associatedCount = associateApplicancesToPartReference(allApplianceIds, partReference);
-        
-        if (count === 0) {
-          toast(`Aucun nouvel appareil importé, mais ${associatedCount} appareils associés à la référence de pièce ${partReference}`);
+        if (allApplianceIds.length > 0) {
+          const associatedCount = associateApplicancesToPartReference(allApplianceIds, partReference);
+          console.log("Nombre d'associations créées:", associatedCount);
+          
+          if (importedCount === 0) {
+            toast(`Aucun nouvel appareil importé, mais ${associatedCount} appareils associés à la référence de pièce ${partReference}`);
+          } else {
+            toast(`${importedCount} nouveaux appareils importés et ${associatedCount} appareils associés à la référence de pièce ${partReference}`);
+          }
         } else {
-          toast(`${count} nouveaux appareils importés et ${associatedCount} appareils associés à la référence de pièce ${partReference}`);
+          console.warn("Aucun appareil à associer trouvé");
+          toast("Erreur: Aucun appareil trouvé pour l'association");
         }
       } else {
-        if (count === 0) {
+        if (importedCount === 0) {
           toast("Aucun nouvel appareil à importer (références déjà présentes dans la base de données)");
         } else {
-          toast(`${count} nouveaux appareils importés avec succès`);
+          toast(`${importedCount} nouveaux appareils importés avec succès`);
         }
       }
 
       return safeAppliancesToImport;
     } catch (error) {
+      console.error("Erreur lors de l'import:", error);
       toast("Une erreur est survenue lors de l'importation des données");
-      console.error("Import error:", error);
       return [];
     }
   };
