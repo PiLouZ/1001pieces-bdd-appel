@@ -10,12 +10,18 @@ export function exportAppliances(appliances: Appliance[], options: ExportOptions
   const { format, includeHeader = true, partReference } = options;
   
   if (format === "csv") {
-    // Headers for the CSV with the new format
-    const headers = [
+    // Headers for the CSV - removed "Référence de la pièce" for all appliances and by brand/type exports
+    const headers = partReference ? [
       "Référence de la pièce",
       "Type de l'appareil",
       "Marque de l'appareil",
-      "Modèle de l'appareil", // This will be a concatenation
+      "Modèle de l'appareil",
+      "Référence technique de l'appareil",
+      "Référence commerciale de l'appareil"
+    ] : [
+      "Type de l'appareil",
+      "Marque de l'appareil",
+      "Modèle de l'appareil",
       "Référence technique de l'appareil",
       "Référence commerciale de l'appareil"
     ];
@@ -36,8 +42,14 @@ export function exportAppliances(appliances: Appliance[], options: ExportOptions
       // Create the model field by concatenating reference and commercialRef
       const model = `${reference}${commercialRef ? " - " + commercialRef : ""}`;
       
-      const row = [
-        partReference || "",
+      const row = partReference ? [
+        partReference,
+        type,
+        brand,
+        model,
+        reference,
+        commercialRef
+      ] : [
         type,
         brand,
         model,
@@ -56,7 +68,9 @@ export function exportAppliances(appliances: Appliance[], options: ExportOptions
     // Add header row if includeHeader is true
     if (includeHeader) {
       html += '<thead><tr>';
-      html += '<th>Référence de la pièce</th>';
+      if (partReference) {
+        html += '<th>Référence de la pièce</th>';
+      }
       html += '<th>Type de l\'appareil</th>';
       html += '<th>Marque de l\'appareil</th>';
       html += '<th>Modèle de l\'appareil</th>';
@@ -79,7 +93,9 @@ export function exportAppliances(appliances: Appliance[], options: ExportOptions
       const model = `${reference}${commercialRef ? " - " + commercialRef : ""}`;
       
       html += '<tr>';
-      html += `<td>${partReference || ""}</td>`;
+      if (partReference) {
+        html += `<td>${partReference}</td>`;
+      }
       html += `<td>${type}</td>`;
       html += `<td>${brand}</td>`;
       html += `<td>${model}</td>`;

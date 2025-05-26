@@ -33,15 +33,30 @@ const Import: React.FC = () => {
     try {
       const safeAppliancesToImport = Array.isArray(appliancesToImport) ? appliancesToImport : [];
       
+      console.log("Import demandé:", { appliancesToImport: safeAppliancesToImport, partReference });
+      
       const count = importAppliances(safeAppliancesToImport);
 
       // Si une référence de pièce est fournie, associer TOUS les appareils (nouveaux ET existants)
       if (partReference && partReference.trim()) {
-        // Récupérer les IDs de tous les appareils (nouveaux et existants)
-        const allApplianceIds = safeAppliancesToImport.map(appliance => {
+        // Récupérer les IDs de tous les appareils mentionnés dans l'import
+        const allApplianceIds: string[] = [];
+        
+        safeAppliancesToImport.forEach(appliance => {
+          // Chercher l'appareil existant par référence
           const existingAppliance = getApplianceByReference(appliance.reference);
-          return existingAppliance ? existingAppliance.id : appliance.id;
+          if (existingAppliance) {
+            // Appareil existant - utiliser son ID
+            allApplianceIds.push(existingAppliance.id);
+            console.log("Appareil existant trouvé:", existingAppliance.id, "pour référence:", appliance.reference);
+          } else {
+            // Nouvel appareil - utiliser l'ID de l'appareil importé
+            allApplianceIds.push(appliance.id);
+            console.log("Nouvel appareil:", appliance.id, "pour référence:", appliance.reference);
+          }
         });
+        
+        console.log("IDs des appareils à associer:", allApplianceIds);
         
         // Associer tous ces appareils à la référence de pièce
         const associatedCount = associateApplicancesToPartReference(allApplianceIds, partReference);

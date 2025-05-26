@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Tag, Plus, Trash } from "lucide-react";
 import { toast } from "sonner";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useAppliances } from "@/hooks/useAppliances";
 
 interface PartReferencesDialogProps {
   open: boolean;
@@ -37,6 +38,9 @@ const PartReferencesDialog: React.FC<PartReferencesDialogProps> = ({
   const [selectedPartReference, setSelectedPartReference] = useState("");
   const [newPartReference, setNewPartReference] = useState("");
   const [tabMode, setTabMode] = useState<"existing" | "new">("existing");
+  
+  // Utiliser le hook pour accéder à la fonction de suppression
+  const { removeAppliancePartAssociation } = useAppliances();
   
   // Get part references from the function or default to empty array
   const partReferences = getPartReferencesForAppliance ? 
@@ -84,6 +88,22 @@ const PartReferencesDialog: React.FC<PartReferencesDialogProps> = ({
     }
   };
 
+  const handleRemoveReference = (partRef: string) => {
+    if (removeAppliancePartAssociation) {
+      try {
+        removeAppliancePartAssociation(applianceId, partRef);
+        toast("Référence supprimée", {
+          description: `La référence ${partRef} a été dissociée de l'appareil`
+        });
+      } catch (error) {
+        console.error("Erreur lors de la suppression:", error);
+        toast("Erreur", {
+          description: "Impossible de supprimer l'association"
+        });
+      }
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
@@ -114,7 +134,7 @@ const PartReferencesDialog: React.FC<PartReferencesDialogProps> = ({
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => {/* Implémentation future */}}
+                        onClick={() => handleRemoveReference(ref)}
                       >
                         <Trash className="h-4 w-4 text-red-500" />
                       </Button>

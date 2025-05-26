@@ -24,16 +24,6 @@ import {
   TableHeader,
   TableRow
 } from "@/components/ui/table";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import PartReferencesDialog from "./PartReferencesDialog";
 
 interface ApplianceListProps {
@@ -66,8 +56,6 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
   getPartReferencesForAppliance,
   associateAppliancesToPartReference
 }) => {
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [applianceToDelete, setApplianceToDelete] = useState<string | null>(null);
   const [editableFields, setEditableFields] = useState<Record<string, { brand?: ApplianceEditable; type?: ApplianceEditable }>>({});
   const [currentAppliance, setCurrentAppliance] = useState<Appliance | null>(null);
   const [partReferencesOpen, setPartReferencesOpen] = useState(false);
@@ -140,18 +128,6 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
     
     return sorted;
   }, [appliances, sortField, sortDirection]);
-
-  const confirmDelete = () => {
-    if (applianceToDelete) {
-      onDelete(applianceToDelete);
-    }
-    setDeleteDialogOpen(false);
-  };
-
-  const handleDelete = (id: string) => {
-    setApplianceToDelete(id);
-    setDeleteDialogOpen(true);
-  };
 
   const handleStartEdit = (id: string, field: "brand" | "type", initialValue: string) => {
     setEditableFields(prev => ({
@@ -409,7 +385,7 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => handleDelete(appliance.id)}
+                        onClick={() => onDelete(appliance.id)}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -421,22 +397,6 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
           </TableBody>
         </Table>
       </div>
-      
-      {/* Dialog pour la confirmation de suppression */}
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Confirmer la suppression</AlertDialogTitle>
-            <AlertDialogDescription>
-              Êtes-vous sûr de vouloir supprimer cet appareil ? Cette action est irréversible.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Annuler</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDelete}>Supprimer</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
       
       {/* Dialog pour afficher les références de pièces compatibles */}
       {currentAppliance && (

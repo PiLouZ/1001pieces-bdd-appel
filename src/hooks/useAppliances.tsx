@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Appliance, ImportSession, AppliancePartAssociation } from "../types/appliance";
 import { defaultAppliances } from "../data/defaultAppliances";
@@ -295,6 +294,8 @@ export const useAppliances = () => {
 
   // Associer des appareils à une référence de pièce
   const associateApplicancesToPartReference = (applianceIds: string[], partReference: string) => {
+    console.log("Association demandée:", { applianceIds, partReference });
+    
     // Sauvegarder la référence de pièce si elle n'existe pas déjà
     if (!knownPartReferences.includes(partReference)) {
       const updatedRefs = [...knownPartReferences, partReference];
@@ -310,16 +311,26 @@ export const useAppliances = () => {
       dateAssociated: new Date().toISOString()
     }));
     
+    console.log("Nouvelles associations créées:", newAssociations);
+    
     // Ajouter les nouvelles associations sans créer de doublons
     setAppliancePartAssociations(prev => {
       const existingAssocs = new Set(prev.map(a => `${a.applianceId}-${a.partReference}`));
       const filteredNewAssocs = newAssociations.filter(
         na => !existingAssocs.has(`${na.applianceId}-${na.partReference}`)
       );
+      console.log("Associations filtrées (sans doublons):", filteredNewAssocs);
       return [...prev, ...filteredNewAssocs];
     });
     
     return applianceIds.length;
+  };
+
+  // Supprimer une association entre un appareil et une référence de pièce
+  const removeAppliancePartAssociation = (applianceId: string, partReference: string) => {
+    setAppliancePartAssociations(prev => 
+      prev.filter(assoc => !(assoc.applianceId === applianceId && assoc.partReference === partReference))
+    );
   };
 
   // Récupérer les appareils compatibles avec une référence de pièce
@@ -395,6 +406,7 @@ export const useAppliances = () => {
     suggestBrand,
     suggestType,
     associateApplicancesToPartReference,
+    removeAppliancePartAssociation,
     getAppliancesByPartReference,
     getPartReferencesForAppliance,
     saveImportSession,
