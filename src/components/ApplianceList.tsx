@@ -38,6 +38,7 @@ interface ApplianceListProps {
   knownPartReferences?: string[];
   getPartReferencesForAppliance?: (id: string) => string[];
   associateAppliancesToPartReference?: (ids: string[], partRef: string) => number;
+  onRemoveAssociation?: (applianceId: string, partRef: string) => void;
 }
 
 type SortField = "reference" | "commercialRef" | "brand" | "type";
@@ -54,7 +55,8 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
   someSelected = false,
   knownPartReferences = [],
   getPartReferencesForAppliance,
-  associateAppliancesToPartReference
+  associateAppliancesToPartReference,
+  onRemoveAssociation
 }) => {
   const [editableFields, setEditableFields] = useState<Record<string, { brand?: ApplianceEditable; type?: ApplianceEditable }>>({});
   const [currentAppliance, setCurrentAppliance] = useState<Appliance | null>(null);
@@ -226,7 +228,11 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
                 <TableHead className="w-10">
                   <Checkbox 
                     checked={allSelected ? true : someSelected ? "indeterminate" : false}
-                    onCheckedChange={handleSelectAllChange}
+                    onCheckedChange={(checked) => {
+                      if (onSelectAll && typeof checked === "boolean") {
+                        onSelectAll(checked);
+                      }
+                    }}
                     disabled={!appliances.length} 
                   />
                 </TableHead>
@@ -404,10 +410,11 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
           open={partReferencesOpen}
           onOpenChange={setPartReferencesOpen}
           applianceId={currentAppliance.id}
-          applianceReference={currentAppliance.reference}
+          appliance={currentAppliance}
+          currentPartReferences={getPartReferencesForAppliance ? getPartReferencesForAppliance(currentAppliance.id) : []}
           knownPartReferences={knownPartReferences || []}
-          getPartReferencesForAppliance={(id) => getPartReferencesForAppliance ? getPartReferencesForAppliance(id) : []}
-          associateAppliancesToPartReference={(ids, partRef) => associateAppliancesToPartReference ? associateAppliancesToPartReference(ids, partRef) : 0}
+          onAssociate={(ids, partRef) => associateAppliancesToPartReference ? associateAppliancesToPartReference(ids, partRef) : 0}
+          onRemoveAssociation={onRemoveAssociation || (() => {})}
         />
       )}
     </div>
