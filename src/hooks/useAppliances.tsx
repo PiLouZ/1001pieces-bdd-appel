@@ -294,14 +294,22 @@ export const useAppliances = () => {
 
   // Associer des appareils à une référence de pièce
   const associateApplicancesToPartReference = (applianceIds: string[], partReference: string) => {
-    console.log("Association demandée:", { applianceIds, partReference });
+    console.log("=== FONCTION ASSOCIATION ===");
+    console.log("IDs reçus:", applianceIds);
+    console.log("Référence pièce:", partReference);
+    console.log("Appareils dans la base:", appliances.map(a => ({ id: a.id, ref: a.reference })));
     
     // Vérifier que les appareils existent dans la base
-    const validIds = applianceIds.filter(id => appliances.find(app => app.id === id));
-    console.log("IDs valides trouvés:", validIds);
+    const validIds = applianceIds.filter(id => {
+      const found = appliances.find(app => app.id === id);
+      console.log(`ID ${id} -> ${found ? 'TROUVÉ' : 'NON TROUVÉ'}`);
+      return found;
+    });
+    
+    console.log("IDs valides après vérification:", validIds);
     
     if (validIds.length === 0) {
-      console.warn("Aucun appareil valide trouvé pour l'association");
+      console.error("ERREUR: Aucun appareil valide trouvé pour l'association");
       return 0;
     }
     
@@ -310,6 +318,7 @@ export const useAppliances = () => {
       const updatedRefs = [...knownPartReferences, partReference];
       setKnownPartReferences(updatedRefs);
       localStorage.setItem("knownPartReferences", JSON.stringify(updatedRefs));
+      console.log("Nouvelle référence de pièce ajoutée:", partReference);
     }
     
     // Créer de nouvelles associations
@@ -320,7 +329,7 @@ export const useAppliances = () => {
       dateAssociated: new Date().toISOString()
     }));
     
-    console.log("Nouvelles associations créées:", newAssociations);
+    console.log("Nouvelles associations à créer:", newAssociations);
     
     // Ajouter les nouvelles associations sans créer de doublons
     setAppliancePartAssociations(prev => {
@@ -329,9 +338,11 @@ export const useAppliances = () => {
         na => !existingAssocs.has(`${na.applianceId}-${na.partReference}`)
       );
       console.log("Associations filtrées (sans doublons):", filteredNewAssocs);
+      console.log("Associations totales après ajout:", [...prev, ...filteredNewAssocs].length);
       return [...prev, ...filteredNewAssocs];
     });
     
+    console.log("=== FIN ASSOCIATION ===");
     return validIds.length;
   };
 
