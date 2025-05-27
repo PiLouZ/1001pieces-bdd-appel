@@ -33,58 +33,74 @@ const Import: React.FC = () => {
     try {
       const safeAppliancesToImport = Array.isArray(appliancesToImport) ? appliancesToImport : [];
       
-      console.log("=== DÉBUT IMPORT ===");
+      console.log("=== DÉBUT PROCESSUS IMPORT COMPLET ===");
       console.log("Appareils à importer:", safeAppliancesToImport.length);
+      console.log("Détail des appareils:", safeAppliancesToImport.map(a => ({ ref: a.reference, brand: a.brand, type: a.type })));
       console.log("Référence de pièce:", partReference);
+      console.log("État de la base AVANT import:", safeAllAppliances.length, "appareils");
       
       // Étape 1: Importer les nouveaux appareils
       const importedCount = importAppliances(safeAppliancesToImport);
       console.log("Nombre d'appareils nouvellement importés:", importedCount);
       
-      // Étape 2: Récupérer les IDs réels de TOUS les appareils (nouveaux ET existants)
-      const allApplianceIds: string[] = [];
-      
-      safeAppliancesToImport.forEach(importApp => {
-        // Chercher l'appareil dans la base APRÈS l'import pour avoir le bon ID
-        const foundAppliance = safeAllAppliances.find(a => a.reference === importApp.reference);
-        if (foundAppliance) {
-          allApplianceIds.push(foundAppliance.id);
-          console.log(`Appareil trouvé: ${importApp.reference} -> ID: ${foundAppliance.id}`);
-        } else {
-          console.error(`ERREUR: Appareil non trouvé après import: ${importApp.reference}`);
-        }
-      });
-      
-      console.log("IDs finaux à associer:", allApplianceIds);
-      
-      // Étape 3: Association à la référence de pièce si fournie
-      if (partReference && partReference.trim() && allApplianceIds.length > 0) {
-        console.log("=== DÉBUT ASSOCIATION ===");
-        const associatedCount = associateApplicancesToPartReference(allApplianceIds, partReference);
-        console.log("Nombre d'associations créées:", associatedCount);
+      // Étape 2: Attendre que les changements soient propagés et récupérer les IDs
+      // On utilise un setTimeout pour laisser le temps au state de se mettre à jour
+      setTimeout(() => {
+        console.log("=== ÉTAPE 2: RÉCUPÉRATION DES IDS ===");
+        console.log("État de la base APRÈS import:", safeAllAppliances.length, "appareils");
         
-        if (associatedCount > 0) {
-          if (importedCount === 0) {
-            toast(`Aucun nouvel appareil importé, mais ${associatedCount} appareils associés à la référence de pièce ${partReference}`);
+        const applianceIds: string[] = [];
+        const notFoundAppliances: string[] = [];
+        
+        safeAppliancesToImport.forEach(importApp => {
+          const foundAppliance = safeAllAppliances.find(a => a.reference === importApp.reference);
+          if (foundAppliance) {
+            applianceIds.push(foundAppliance.id);
+            console.log(`✓ Appareil trouvé: ${importApp.reference} -> ID: ${foundAppliance.id}`);
           } else {
-            toast(`${importedCount} nouveaux appareils importés et ${associatedCount} appareils associés à la référence de pièce ${partReference}`);
+            notFoundAppliances.push(importApp.reference);
+            console.error(`✗ ERREUR: Appareil non trouvé: ${importApp.reference}`);
           }
+        });
+        
+        console.log("IDs collectés:", applianceIds);
+        console.log("Appareils non trouvés:", notFoundAppliances);
+        
+        // Étape 3: Créer les associations si une référence de pièce est fournie
+        if (partReference && partReference.trim() && applianceIds.length > 0) {
+          console.log("=== ÉTAPE 3: CRÉATION DES ASSOCIATIONS ===");
+          console.log("Référence de pièce:", partReference);
+          console.log("IDs à associer:", applianceIds);
+          
+          const associatedCount = associateApplicancesToPartReference(applianceIds, partReference);
+          console.log("Résultat des associations:", associatedCount);
+          
+          // Messages de retour utilisateur
+          if (associatedCount > 0) {
+            if (importedCount === 0) {
+              toast(`Aucun nouvel appareil importé, mais ${associatedCount} appareils associés à la référence de pièce ${partReference}`);
+            } else {
+              toast(`${importedCount} nouveaux appareils importés et ${associatedCount} appareils associés à la référence de pièce ${partReference}`);
+            }
+          } else {
+            console.error("ERREUR: Aucune association créée");
+            toast("Erreur: Impossible de créer les associations avec la référence de pièce");
+          }
+        } else if (partReference && applianceIds.length === 0) {
+          console.error("ERREUR: Aucun appareil trouvé pour l'association");
+          toast("Erreur: Aucun appareil trouvé pour l'association");
         } else {
-          console.error("ERREUR: Aucune association créée");
-          toast("Erreur: Impossible de créer les associations avec la référence de pièce");
+          // Pas de référence de pièce, juste un import
+          if (importedCount === 0) {
+            toast("Aucun nouvel appareil à importer (références déjà présentes dans la base de données)");
+          } else {
+            toast(`${importedCount} nouveaux appareils importés avec succès`);
+          }
         }
-      } else if (partReference && allApplianceIds.length === 0) {
-        console.error("ERREUR: Aucun appareil trouvé pour l'association");
-        toast("Erreur: Aucun appareil trouvé pour l'association");
-      } else {
-        if (importedCount === 0) {
-          toast("Aucun nouvel appareil à importer (références déjà présentes dans la base de données)");
-        } else {
-          toast(`${importedCount} nouveaux appareils importés avec succès`);
-        }
-      }
-
-      console.log("=== FIN IMPORT ===");
+        
+        console.log("=== FIN PROCESSUS COMPLET ===");
+      }, 100); // Délai de 100ms pour laisser le state se mettre à jour
+      
       return safeAppliancesToImport;
     } catch (error) {
       console.error("Erreur lors de l'import:", error);
