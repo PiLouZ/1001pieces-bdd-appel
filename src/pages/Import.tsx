@@ -39,68 +39,118 @@ const Import: React.FC = () => {
       console.log("Référence de pièce:", partReference);
       console.log("État de la base AVANT import:", safeAllAppliances.length, "appareils");
       
-      // Étape 1: Importer les nouveaux appareils
+      // Étape 1: Importer les nouveaux appareils et récupérer le nombre importé
       const importedCount = importAppliances(safeAppliancesToImport);
       console.log("Nombre d'appareils nouvellement importés:", importedCount);
       
-      // Étape 2: Attendre que les changements soient propagés et récupérer les IDs
-      // On utilise un setTimeout pour laisser le temps au state de se mettre à jour
-      setTimeout(() => {
-        console.log("=== ÉTAPE 2: RÉCUPÉRATION DES IDS ===");
-        console.log("État de la base APRÈS import:", safeAllAppliances.length, "appareils");
+      // Étape 2: Si une référence de pièce est fournie, créer les associations
+      if (partReference && partReference.trim()) {
+        console.log("=== ÉTAPE 2: CRÉATION DES ASSOCIATIONS ===");
+        console.log("Référence de pièce:", partReference);
         
-        const applianceIds: string[] = [];
-        const notFoundAppliances: string[] = [];
+        // Pour les appareils existants, on peut les associer directement
+        const existingApplianceIds: string[] = [];
+        const newApplianceReferences: string[] = [];
         
         safeAppliancesToImport.forEach(importApp => {
-          const foundAppliance = safeAllAppliances.find(a => a.reference === importApp.reference);
-          if (foundAppliance) {
-            applianceIds.push(foundAppliance.id);
-            console.log(`✓ Appareil trouvé: ${importApp.reference} -> ID: ${foundAppliance.id}`);
+          const existingAppliance = safeAllAppliances.find(a => a.reference === importApp.reference);
+          if (existingAppliance) {
+            existingApplianceIds.push(existingAppliance.id);
+            console.log(`✓ Appareil existant trouvé: ${importApp.reference} -> ID: ${existingAppliance.id}`);
           } else {
-            notFoundAppliances.push(importApp.reference);
-            console.error(`✗ ERREUR: Appareil non trouvé: ${importApp.reference}`);
+            newApplianceReferences.push(importApp.reference);
+            console.log(`→ Nouvel appareil à associer: ${importApp.reference}`);
           }
         });
         
-        console.log("IDs collectés:", applianceIds);
-        console.log("Appareils non trouvés:", notFoundAppliances);
-        
-        // Étape 3: Créer les associations si une référence de pièce est fournie
-        if (partReference && partReference.trim() && applianceIds.length > 0) {
-          console.log("=== ÉTAPE 3: CRÉATION DES ASSOCIATIONS ===");
-          console.log("Référence de pièce:", partReference);
-          console.log("IDs à associer:", applianceIds);
-          
-          const associatedCount = associateApplicancesToPartReference(applianceIds, partReference);
-          console.log("Résultat des associations:", associatedCount);
-          
-          // Messages de retour utilisateur
-          if (associatedCount > 0) {
-            if (importedCount === 0) {
-              toast(`Aucun nouvel appareil importé, mais ${associatedCount} appareils associés à la référence de pièce ${partReference}`);
-            } else {
-              toast(`${importedCount} nouveaux appareils importés et ${associatedCount} appareils associés à la référence de pièce ${partReference}`);
-            }
-          } else {
-            console.error("ERREUR: Aucune association créée");
-            toast("Erreur: Impossible de créer les associations avec la référence de pièce");
-          }
-        } else if (partReference && applianceIds.length === 0) {
-          console.error("ERREUR: Aucun appareil trouvé pour l'association");
-          toast("Erreur: Aucun appareil trouvé pour l'association");
-        } else {
-          // Pas de référence de pièce, juste un import
-          if (importedCount === 0) {
-            toast("Aucun nouvel appareil à importer (références déjà présentes dans la base de données)");
-          } else {
-            toast(`${importedCount} nouveaux appareils importés avec succès`);
-          }
+        // Associer les appareils existants immédiatement
+        let associatedCount = 0;
+        if (existingApplianceIds.length > 0) {
+          associatedCount += associateApplicancesToPartReference(existingApplianceIds, partReference);
+          console.log("Appareils existants associés:", associatedCount);
         }
         
-        console.log("=== FIN PROCESSUS COMPLET ===");
-      }, 100); // Délai de 100ms pour laisser le state se mettre à jour
+        // Pour les nouveaux appareils, utiliser un délai plus long et plusieurs tentatives
+        if (newApplianceReferences.length > 0) {
+          let attempts = 0;
+          const maxAttempts = 10;
+          const attemptInterval = 200; // 200ms entre chaque tentative
+          
+          const tryAssociateNewAppliances = () => {
+            attempts++;
+            console.log(`=== TENTATIVE ${attempts}/${maxAttempts} D'ASSOCIATION DES NOUVEAUX APPAREILS ===`);
+            
+            // Récupérer l'état actuel de la base (peut être mis à jour depuis la dernière fois)
+            const currentAppliances = safeAllAppliances;
+            console.log("État actuel de la base:", currentAppliances.length, "appareils");
+            
+            const newApplianceIds: string[] = [];
+            const stillMissingReferences: string[] = [];
+            
+            newApplianceReferences.forEach(ref => {
+              const foundAppliance = currentAppliances.find(a => a.reference === ref);
+              if (foundAppliance) {
+                newApplianceIds.push(foundAppliance.id);
+                console.log(`✓ Nouvel appareil trouvé: ${ref} -> ID: ${foundAppliance.id}`);
+              } else {
+                stillMissingReferences.push(ref);
+                console.log(`✗ Nouvel appareil non trouvé: ${ref}`);
+              }
+            });
+            
+            // Associer les nouveaux appareils trouvés
+            if (newApplianceIds.length > 0) {
+              const newAssociationsCount = associateApplicancesToPartReference(newApplianceIds, partReference);
+              associatedCount += newAssociationsCount;
+              console.log("Nouveaux appareils associés:", newAssociationsCount);
+            }
+            
+            // Si tous les appareils sont trouvés ou si on a atteint le max de tentatives
+            if (stillMissingReferences.length === 0 || attempts >= maxAttempts) {
+              console.log("=== FIN PROCESSUS D'ASSOCIATION ===");
+              console.log("Total d'appareils associés:", associatedCount);
+              console.log("Appareils encore manquants:", stillMissingReferences);
+              
+              // Messages finaux
+              if (importedCount === 0 && associatedCount > 0) {
+                toast(`Aucun nouvel appareil importé, mais ${associatedCount} appareils associés à la référence de pièce ${partReference}`);
+              } else if (importedCount > 0 && associatedCount > 0) {
+                toast(`${importedCount} nouveaux appareils importés et ${associatedCount} appareils associés à la référence de pièce ${partReference}`);
+              } else if (importedCount > 0 && associatedCount === 0) {
+                toast(`${importedCount} nouveaux appareils importés, mais aucune association créée`);
+              } else {
+                toast("Erreur: Impossible de créer les associations");
+              }
+              
+              return;
+            }
+            
+            // Programmer la prochaine tentative
+            setTimeout(tryAssociateNewAppliances, attemptInterval);
+          };
+          
+          // Commencer les tentatives d'association après un délai initial
+          setTimeout(tryAssociateNewAppliances, attemptInterval);
+        } else {
+          // Pas de nouveaux appareils, juste des existants
+          if (importedCount === 0 && associatedCount > 0) {
+            toast(`Aucun nouvel appareil importé, mais ${associatedCount} appareils associés à la référence de pièce ${partReference}`);
+          } else if (importedCount > 0 && associatedCount > 0) {
+            toast(`${importedCount} nouveaux appareils importés et ${associatedCount} appareils associés à la référence de pièce ${partReference}`);
+          } else {
+            toast("Erreur: Impossible de créer les associations");
+          }
+        }
+      } else {
+        // Pas de référence de pièce, juste un import
+        if (importedCount === 0) {
+          toast("Aucun nouvel appareil à importer (références déjà présentes dans la base de données)");
+        } else {
+          toast(`${importedCount} nouveaux appareils importés avec succès`);
+        }
+      }
       
+      console.log("=== FIN PROCESSUS IMPORT ===");
       return safeAppliancesToImport;
     } catch (error) {
       console.error("Erreur lors de l'import:", error);

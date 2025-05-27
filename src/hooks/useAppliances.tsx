@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Appliance, ImportSession, AppliancePartAssociation } from "../types/appliance";
 import { defaultAppliances } from "../data/defaultAppliances";
 
@@ -131,18 +131,41 @@ export const useAppliances = () => {
     return ids.length;
   };
 
-  // Importer plusieurs appareils
-  const importAppliances = (newAppliances: Appliance[]) => {
+  // Importer plusieurs appareils avec une approche améliorée
+  const importAppliances = useCallback((newAppliances: Appliance[]) => {
+    console.log("=== DÉBUT IMPORT APPAREILS ===");
+    console.log("Appareils à importer:", newAppliances.length);
+    
     // Vérifier les doublons par référence
     const existingRefs = new Set(appliances.map(app => app.reference));
     const uniqueNewAppliances = newAppliances.filter(app => !existingRefs.has(app.reference));
     
+    console.log("Appareils existants (références):", Array.from(existingRefs));
+    console.log("Nouveaux appareils uniques:", uniqueNewAppliances.length);
+    
     if (uniqueNewAppliances.length > 0) {
-      setAppliances(prev => [...prev, ...uniqueNewAppliances]);
+      // Ajouter les nouveaux appareils avec des IDs générés de façon cohérente
+      const appliancesToAdd = uniqueNewAppliances.map(app => ({
+        ...app,
+        id: app.id || Date.now().toString() + Math.random().toString(36).substr(2, 9),
+        dateAdded: app.dateAdded || new Date().toISOString().split("T")[0]
+      }));
+      
+      console.log("Appareils avec IDs générés:", appliancesToAdd.map(a => ({ ref: a.reference, id: a.id })));
+      
+      setAppliances(prev => {
+        const updated = [...prev, ...appliancesToAdd];
+        console.log("État de la base après import:", updated.length, "appareils");
+        return updated;
+      });
+      
+      console.log("=== FIN IMPORT APPAREILS ===");
       return uniqueNewAppliances.length;
     }
+    
+    console.log("=== FIN IMPORT APPAREILS (AUCUN NOUVEAU) ===");
     return 0;
-  };
+  }, [appliances]);
 
   // Supprimer un appareil
   const deleteAppliance = (id: string) => {
@@ -292,9 +315,9 @@ export const useAppliances = () => {
     return null;
   };
 
-  // Associer des appareils à une référence de pièce
-  const associateApplicancesToPartReference = (applianceIds: string[], partReference: string) => {
-    console.log("=== DÉBUT FONCTION ASSOCIATION ===");
+  // Associer des appareils à une référence de pièce avec une approche améliorée
+  const associateApplicancesToPartReference = useCallback((applianceIds: string[], partReference: string) => {
+    console.log("=== DÉBUT FONCTION ASSOCIATION AMÉLIORÉE ===");
     console.log("IDs reçus:", applianceIds);
     console.log("Type des IDs:", typeof applianceIds, Array.isArray(applianceIds));
     console.log("Référence pièce:", partReference);
@@ -316,86 +339,95 @@ export const useAppliances = () => {
       return 0;
     }
     
-    console.log("État actuel de la base d'appareils:", appliances.length, "appareils");
-    console.log("Détail des appareils:", appliances.map(a => ({ id: a.id, ref: a.reference })));
+    // Utiliser une fonction de rappel pour accéder au state le plus récent
+    let successCount = 0;
     
-    // Vérifier que les appareils existent dans la base
-    const validationResults = applianceIds.map(id => {
-      const found = appliances.find(app => app.id === id);
-      console.log(`Validation ID ${id}: ${found ? 'TROUVÉ' : 'NON TROUVÉ'}`);
-      if (found) {
-        console.log(`  -> Appareil: ${found.reference} (${found.brand} ${found.type})`);
-      }
-      return { id, found: !!found, appliance: found };
-    });
-    
-    const validIds = validationResults.filter(result => result.found).map(result => result.id);
-    const invalidIds = validationResults.filter(result => !result.found).map(result => result.id);
-    
-    console.log("IDs valides:", validIds);
-    console.log("IDs invalides:", invalidIds);
-    
-    if (validIds.length === 0) {
-      console.error("ERREUR CRITIQUE: Aucun appareil valide trouvé pour l'association");
-      console.error("Cela peut indiquer un problème de synchronisation ou de propagation du state");
-      return 0;
-    }
-    
-    // Vérifier les associations existantes
-    console.log("Associations actuelles:", appliancePartAssociations.length);
-    const existingAssociations = appliancePartAssociations.filter(
-      assoc => assoc.partReference === partReference && validIds.includes(assoc.applianceId)
-    );
-    console.log("Associations existantes pour cette référence:", existingAssociations.length);
-    
-    // Sauvegarder la référence de pièce si elle n'existe pas déjà
-    if (!knownPartReferences.includes(partReference)) {
-      const updatedRefs = [...knownPartReferences, partReference];
-      setKnownPartReferences(updatedRefs);
-      localStorage.setItem("knownPartReferences", JSON.stringify(updatedRefs));
-      console.log("Nouvelle référence de pièce ajoutée:", partReference);
-    } else {
-      console.log("Référence de pièce déjà connue:", partReference);
-    }
-    
-    // Créer de nouvelles associations (éviter les doublons)
-    const newAssociations: AppliancePartAssociation[] = [];
-    const existingKeys = new Set(appliancePartAssociations.map(a => `${a.applianceId}-${a.partReference}`));
-    
-    validIds.forEach(id => {
-      const key = `${id}-${partReference}`;
-      if (!existingKeys.has(key)) {
-        const newAssoc: AppliancePartAssociation = {
-          id: `${id}-${partReference}-${Date.now()}-${Math.random()}`,
-          applianceId: id,
-          partReference,
-          dateAssociated: new Date().toISOString()
-        };
-        newAssociations.push(newAssoc);
-        console.log("Nouvelle association créée:", newAssoc);
-      } else {
-        console.log("Association déjà existante pour ID:", id);
-      }
-    });
-    
-    console.log("Nombre de nouvelles associations à créer:", newAssociations.length);
-    
-    if (newAssociations.length > 0) {
-      // Ajouter les nouvelles associations
-      setAppliancePartAssociations(prev => {
-        const updated = [...prev, ...newAssociations];
-        console.log("Associations totales après ajout:", updated.length);
-        return updated;
+    setAppliances(currentAppliances => {
+      console.log("État actuel de la base d'appareils dans setAppliances:", currentAppliances.length, "appareils");
+      console.log("Détail des appareils:", currentAppliances.map(a => ({ id: a.id, ref: a.reference })));
+      
+      // Vérifier que les appareils existent dans la base
+      const validationResults = applianceIds.map(id => {
+        const found = currentAppliances.find(app => app.id === id);
+        console.log(`Validation ID ${id}: ${found ? 'TROUVÉ' : 'NON TROUVÉ'}`);
+        if (found) {
+          console.log(`  -> Appareil: ${found.reference} (${found.brand} ${found.type})`);
+        }
+        return { id, found: !!found, appliance: found };
       });
       
-      console.log("Associations ajoutées avec succès");
-    } else {
-      console.log("Aucune nouvelle association à créer (toutes existent déjà)");
-    }
+      const validIds = validationResults.filter(result => result.found).map(result => result.id);
+      const invalidIds = validationResults.filter(result => !result.found).map(result => result.id);
+      
+      console.log("IDs valides:", validIds);
+      console.log("IDs invalides:", invalidIds);
+      
+      if (validIds.length === 0) {
+        console.error("ERREUR CRITIQUE: Aucun appareil valide trouvé pour l'association");
+        return currentAppliances; // Retourner l'état inchangé
+      }
+      
+      successCount = validIds.length;
+      
+      // Sauvegarder la référence de pièce si elle n'existe pas déjà
+      setKnownPartReferences(currentRefs => {
+        if (!currentRefs.includes(partReference)) {
+          const updatedRefs = [...currentRefs, partReference];
+          localStorage.setItem("knownPartReferences", JSON.stringify(updatedRefs));
+          console.log("Nouvelle référence de pièce ajoutée:", partReference);
+          return updatedRefs;
+        } else {
+          console.log("Référence de pièce déjà connue:", partReference);
+          return currentRefs;
+        }
+      });
+      
+      // Créer les associations
+      setAppliancePartAssociations(currentAssociations => {
+        console.log("Associations actuelles:", currentAssociations.length);
+        const existingAssociations = currentAssociations.filter(
+          assoc => assoc.partReference === partReference && validIds.includes(assoc.applianceId)
+        );
+        console.log("Associations existantes pour cette référence:", existingAssociations.length);
+        
+        // Créer de nouvelles associations (éviter les doublons)
+        const newAssociations: AppliancePartAssociation[] = [];
+        const existingKeys = new Set(currentAssociations.map(a => `${a.applianceId}-${a.partReference}`));
+        
+        validIds.forEach(id => {
+          const key = `${id}-${partReference}`;
+          if (!existingKeys.has(key)) {
+            const newAssoc: AppliancePartAssociation = {
+              id: `${id}-${partReference}-${Date.now()}-${Math.random()}`,
+              applianceId: id,
+              partReference,
+              dateAssociated: new Date().toISOString()
+            };
+            newAssociations.push(newAssoc);
+            console.log("Nouvelle association créée:", newAssoc);
+          } else {
+            console.log("Association déjà existante pour ID:", id);
+          }
+        });
+        
+        console.log("Nombre de nouvelles associations à créer:", newAssociations.length);
+        
+        if (newAssociations.length > 0) {
+          const updated = [...currentAssociations, ...newAssociations];
+          console.log("Associations totales après ajout:", updated.length);
+          return updated;
+        } else {
+          console.log("Aucune nouvelle association à créer (toutes existent déjà)");
+          return currentAssociations;
+        }
+      });
+      
+      return currentAppliances; // Retourner l'état inchangé des appareils
+    });
     
-    console.log("=== FIN FONCTION ASSOCIATION ===");
-    return validIds.length;
-  };
+    console.log("=== FIN FONCTION ASSOCIATION AMÉLIORÉE ===");
+    return successCount;
+  }, []);
 
   // Supprimer une association entre un appareil et une référence de pièce
   const removeAppliancePartAssociation = (applianceId: string, partReference: string) => {
