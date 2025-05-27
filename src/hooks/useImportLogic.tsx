@@ -62,15 +62,15 @@ export const useImportLogic = ({
         
         let totalAssociatedCount = 0;
         
-        // Associer les appareils existants immédiatement avec leurs vrais IDs
+        // Associer IMMÉDIATEMENT les appareils existants avec leurs vrais IDs
         if (existingApplianceIds.length > 0) {
-          console.log("Association des appareils existants avec IDs:", existingApplianceIds);
+          console.log("Association IMMÉDIATE des appareils existants avec IDs:", existingApplianceIds);
           const existingAssociatedCount = associateApplicancesToPartReference(existingApplianceIds, partReference);
           totalAssociatedCount += existingAssociatedCount;
           console.log("Appareils existants associés:", existingAssociatedCount);
         }
         
-        // Pour les nouveaux appareils, utiliser un délai pour attendre que l'import soit terminé
+        // Pour les nouveaux appareils, attendre qu'ils soient disponibles dans la base
         if (newAppliances.length > 0) {
           let attempts = 0;
           const maxAttempts = 10;

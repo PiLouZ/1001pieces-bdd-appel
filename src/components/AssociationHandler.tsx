@@ -16,9 +16,8 @@ export const AssociationHandler: React.FC<AssociationHandlerProps> = ({
     return associateAppliancesToPartReference(applianceIds, partReference);
   };
 
-  return {
-    safeAssociateAppliancesToPartReference
-  };
+  // Return null since this is just a utility component
+  return null;
 };
 
 export const useAssociationHandler = (
