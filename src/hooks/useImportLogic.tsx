@@ -6,13 +6,13 @@ import { toast } from "sonner";
 interface UseImportLogicProps {
   importAppliances: (appliances: Appliance[]) => number;
   associateApplicancesToPartReference: (applianceIds: string[], partReference: string) => number;
-  allAppliances: Appliance[];
+  getAllAppliances: () => Appliance[]; // Fonction pour obtenir l'état le plus récent
 }
 
 export const useImportLogic = ({
   importAppliances,
   associateApplicancesToPartReference,
-  allAppliances
+  getAllAppliances
 }: UseImportLogicProps) => {
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -31,16 +31,19 @@ export const useImportLogic = ({
       console.log("Appareils à importer:", safeAppliancesToImport.length);
       console.log("Détail des appareils:", safeAppliancesToImport.map(a => ({ ref: a.reference, brand: a.brand, type: a.type })));
       console.log("Référence de pièce:", partReference);
-      console.log("État de la base AVANT import:", allAppliances.length, "appareils");
+      
+      // Obtenir l'état actuel de la base AVANT import
+      const currentAppliances = getAllAppliances();
+      console.log("État de la base AVANT import:", currentAppliances.length, "appareils");
       
       // Séparer les appareils existants et nouveaux AVANT l'import
       const existingAppliances: Appliance[] = [];
       const newAppliances: Appliance[] = [];
       
       safeAppliancesToImport.forEach(importApp => {
-        const existingAppliance = allAppliances.find(a => a.reference === importApp.reference);
+        const existingAppliance = currentAppliances.find(a => a.reference === importApp.reference);
         if (existingAppliance) {
-          existingAppliances.push(existingAppliance); // Garder l'appareil complet avec son vrai ID
+          existingAppliances.push(existingAppliance);
           console.log(`✓ Appareil existant trouvé: ${importApp.reference} -> ID réel: ${existingAppliance.id}`);
         } else {
           newAppliances.push(importApp);
@@ -81,15 +84,15 @@ export const useImportLogic = ({
             attempts++;
             console.log(`=== TENTATIVE ${attempts}/${maxAttempts} D'ASSOCIATION DES NOUVEAUX APPAREILS ===`);
             
-            // Récupérer l'état actuel de la base
-            const currentAppliances = allAppliances;
-            console.log("État actuel de la base:", currentAppliances.length, "appareils");
+            // Récupérer l'état le plus récent de la base
+            const freshAppliances = getAllAppliances();
+            console.log("État actuel de la base:", freshAppliances.length, "appareils");
             
             const newApplianceIds: string[] = [];
             const stillMissingReferences: string[] = [];
             
             newAppliances.forEach(newApp => {
-              const foundAppliance = currentAppliances.find(a => a.reference === newApp.reference);
+              const foundAppliance = freshAppliances.find(a => a.reference === newApp.reference);
               if (foundAppliance) {
                 newApplianceIds.push(foundAppliance.id);
                 console.log(`✓ Nouvel appareil trouvé dans la base: ${newApp.reference} -> ID: ${foundAppliance.id}`);
@@ -163,7 +166,7 @@ export const useImportLogic = ({
       setIsProcessing(false);
       return [];
     }
-  }, [importAppliances, associateApplicancesToPartReference, allAppliances, isProcessing]);
+  }, [importAppliances, associateApplicancesToPartReference, getAllAppliances, isProcessing]);
 
   return {
     handleImport,
