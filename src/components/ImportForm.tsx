@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -18,7 +17,7 @@ import { Download, FileDown } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 interface ImportFormProps {
-  onImport: (appliances: Appliance[]) => Appliance[];
+  onImport: (appliances: Appliance[], partReference?: string) => Appliance[];
   knownBrands: string[];
   knownTypes: string[];
   knownPartReferences: string[];
@@ -70,6 +69,13 @@ const ImportForm: React.FC<ImportFormProps> = ({
       );
       
       if (result.success && result.appliances.length > 0) {
+        // Déterminer la référence de pièce à utiliser
+        const partRef = selectedPartReference || newPartReference || undefined;
+        console.log("🎯 ImportForm - Référence de pièce déterminée:", partRef);
+        console.log("   - selectedPartReference:", selectedPartReference);
+        console.log("   - newPartReference:", newPartReference);
+        console.log("   - partRef final:", partRef);
+        
         // Format à 2 colonnes détecté
         if (result.twoColumnsFormat) {
           // Vérifier si des informations sont manquantes (marque ou type)
@@ -85,16 +91,13 @@ const ImportForm: React.FC<ImportFormProps> = ({
             });
           } else {
             // Toutes les infos sont complètes, importer directement
-            const importedAppliances = onImport(result.appliances);
+            console.log("🚀 Appel onImport avec partRef:", partRef);
+            const importedAppliances = onImport(result.appliances, partRef);
             const applianceIds = importedAppliances.map(app => app.id);
             setImportedApplianceIds(applianceIds);
             
-            // Si une référence de pièce est fournie, associer ces appareils
-            const partRef = selectedPartReference || newPartReference;
+            // Préparer le fichier CSV si une référence de pièce est fournie
             if (partRef && importedAppliances && importedAppliances.length > 0) {
-              associateAppliancesToPartReference(applianceIds, partRef);
-              
-              // Préparer le fichier CSV mais ne pas le télécharger automatiquement
               const csvContent = exportAppliances(importedAppliances, {
                 format: "csv",
                 includeHeader: true,
@@ -105,16 +108,6 @@ const ImportForm: React.FC<ImportFormProps> = ({
               const csvData = generateCSVFile(csvContent, fileName);
               setCsvExportData(csvData);
               setShowExportDialog(true);
-              
-              toast({
-                title: "Succès",
-                description: `${importedAppliances.length} appareils importés et associés à la référence ${partRef}.`
-              });
-            } else {
-              toast({
-                title: "Succès",
-                description: `${result.appliances.length} appareils importés (format à 2 colonnes).`
-              });
             }
             
             setClipboardText("");
@@ -129,16 +122,13 @@ const ImportForm: React.FC<ImportFormProps> = ({
           
         } else {
           // Format à 4 colonnes complet
-          const importedAppliances = onImport(result.appliances);
+          console.log("🚀 Appel onImport avec partRef:", partRef);
+          const importedAppliances = onImport(result.appliances, partRef);
           const applianceIds = importedAppliances.map(app => app.id);
           setImportedApplianceIds(applianceIds);
           
-          // Si une référence de pièce est fournie, associer ces appareils
-          const partRef = selectedPartReference || newPartReference;
+          // Préparer le fichier CSV si une référence de pièce est fournie
           if (partRef && importedAppliances && importedAppliances.length > 0) {
-            associateAppliancesToPartReference(applianceIds, partRef);
-            
-            // Préparer le fichier CSV mais ne pas le télécharger automatiquement
             const csvContent = exportAppliances(importedAppliances, {
               format: "csv",
               includeHeader: true,
@@ -149,16 +139,6 @@ const ImportForm: React.FC<ImportFormProps> = ({
             const csvData = generateCSVFile(csvContent, fileName);
             setCsvExportData(csvData);
             setShowExportDialog(true);
-            
-            toast({
-              title: "Succès",
-              description: `${importedAppliances.length} appareils importés et associés à la référence ${partRef}.`
-            });
-          } else {
-            toast({
-              title: "Succès",
-              description: `${result.appliances.length} appareils importés avec succès`
-            });
           }
           
           setClipboardText("");
@@ -199,6 +179,10 @@ const ImportForm: React.FC<ImportFormProps> = ({
       );
       
       if (result.success && result.appliances.length > 0) {
+        // Déterminer la référence de pièce à utiliser
+        const partRef = selectedPartReference || newPartReference || undefined;
+        console.log("🎯 ImportForm (File) - Référence de pièce déterminée:", partRef);
+        
         if (result.missingInfo && result.missingInfo.length > 0) {
           setAppliancesWithMissingInfo(result.appliances);
           toast({
@@ -206,16 +190,13 @@ const ImportForm: React.FC<ImportFormProps> = ({
             description: `${result.missingInfo.length} appareils ont besoin de compléments d'informations.`
           });
         } else {
-          const importedAppliances = onImport(result.appliances);
+          console.log("🚀 Appel onImport (File) avec partRef:", partRef);
+          const importedAppliances = onImport(result.appliances, partRef);
           const applianceIds = importedAppliances.map(app => app.id);
           setImportedApplianceIds(applianceIds);
           
-          // Si une référence de pièce est fournie, associer ces appareils
-          const partRef = selectedPartReference || newPartReference;
+          // Préparer le fichier CSV si une référence de pièce est fournie
           if (partRef && importedAppliances && importedAppliances.length > 0) {
-            associateAppliancesToPartReference(applianceIds, partRef);
-            
-            // Préparer le fichier CSV mais ne pas le télécharger automatiquement
             const csvContent = exportAppliances(importedAppliances, {
               format: "csv",
               includeHeader: true,
@@ -226,16 +207,6 @@ const ImportForm: React.FC<ImportFormProps> = ({
             const csvData = generateCSVFile(csvContent, fileName);
             setCsvExportData(csvData);
             setShowExportDialog(true);
-            
-            toast({
-              title: "Succès",
-              description: `${importedAppliances.length} appareils importés et associés à la référence ${partRef}.`
-            });
-          } else {
-            toast({
-              title: "Succès",
-              description: `${importedAppliances.length} appareils importés depuis le fichier`
-            });
           }
         }
       } else {
@@ -273,16 +244,17 @@ const ImportForm: React.FC<ImportFormProps> = ({
   };
 
   const handleCompleteMissingInfo = (completedAppliances: Appliance[]) => {
-    const importedAppliances = onImport(completedAppliances);
+    // Déterminer la référence de pièce à utiliser
+    const partRef = selectedPartReference || newPartReference || undefined;
+    console.log("🎯 ImportForm (Complete) - Référence de pièce déterminée:", partRef);
+    
+    console.log("🚀 Appel onImport (Complete) avec partRef:", partRef);
+    const importedAppliances = onImport(completedAppliances, partRef);
     const applianceIds = importedAppliances.map(app => app.id);
     setImportedApplianceIds(applianceIds);
     
-    // Si une référence de pièce est fournie, associer ces appareils
-    const partRef = selectedPartReference || newPartReference;
+    // Préparer le fichier CSV si une référence de pièce est fournie
     if (partRef && importedAppliances && importedAppliances.length > 0) {
-      associateAppliancesToPartReference(applianceIds, partRef);
-      
-      // Préparer le fichier CSV mais ne pas le télécharger automatiquement
       const csvContent = exportAppliances(importedAppliances, {
         format: "csv",
         includeHeader: true,
@@ -293,16 +265,6 @@ const ImportForm: React.FC<ImportFormProps> = ({
       const csvData = generateCSVFile(csvContent, fileName);
       setCsvExportData(csvData);
       setShowExportDialog(true);
-      
-      toast({
-        title: "Succès",
-        description: `${importedAppliances.length} appareils importés et associés à la référence ${partRef}.`
-      });
-    } else {
-      toast({
-        title: "Succès",
-        description: `${importedAppliances.length} appareils importés avec succès`
-      });
     }
     
     setAppliancesWithMissingInfo([]);
