@@ -34,13 +34,13 @@ export const useImportLogic = ({
       console.log("État de la base AVANT import:", allAppliances.length, "appareils");
       
       // Séparer les appareils existants et nouveaux AVANT l'import
-      const existingApplianceIds: string[] = [];
+      const existingAppliances: Appliance[] = [];
       const newAppliances: Appliance[] = [];
       
       safeAppliancesToImport.forEach(importApp => {
         const existingAppliance = allAppliances.find(a => a.reference === importApp.reference);
         if (existingAppliance) {
-          existingApplianceIds.push(existingAppliance.id);
+          existingAppliances.push(existingAppliance); // Garder l'appareil complet avec son vrai ID
           console.log(`✓ Appareil existant trouvé: ${importApp.reference} -> ID réel: ${existingAppliance.id}`);
         } else {
           newAppliances.push(importApp);
@@ -48,6 +48,7 @@ export const useImportLogic = ({
         }
       });
       
+      const existingApplianceIds = existingAppliances.map(app => app.id);
       console.log("Appareils existants (IDs réels):", existingApplianceIds);
       console.log("Nouveaux appareils à importer:", newAppliances.length);
       

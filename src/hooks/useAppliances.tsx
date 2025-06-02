@@ -182,10 +182,12 @@ export const useAppliances = () => {
     setAppliances([]);
     setAppliancePartAssociations([]);
     setImportSessions({});
+    setKnownPartReferences([]);
     localStorage.removeItem("appliances");
     localStorage.removeItem("knownPartReferences");
     localStorage.removeItem("appliancePartAssociations");
     localStorage.removeItem("importSessions");
+    console.log("=== BASE DE DONNÉES NETTOYÉE ===");
   };
 
   // Nettoyer la base de données (supprimer les doublons)

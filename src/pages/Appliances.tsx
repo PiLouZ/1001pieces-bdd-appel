@@ -40,6 +40,7 @@ const Appliances: React.FC = () => {
     setSearchQuery,
     updateAppliance,
     deleteAppliance,
+    clearDatabase,
     knownBrands,
     knownTypes,
     knownPartReferences,
@@ -184,6 +185,11 @@ const Appliances: React.FC = () => {
     toast(`Association avec la référence "${partRef}" supprimée`);
   };
 
+  const handleClearDatabase = () => {
+    clearDatabase();
+    toast("Base de données nettoyée");
+  };
+
   return (
     <div className="flex flex-col min-h-screen">
       <Navigation />
@@ -203,6 +209,13 @@ const Appliances: React.FC = () => {
               <Link to="/export">
                 <FileDown className="mr-2 h-4 w-4" /> Exporter
               </Link>
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={handleClearDatabase}
+              size="sm"
+            >
+              <Trash2 className="mr-2 h-4 w-4" /> Nettoyer DB
             </Button>
           </div>
         </div>
