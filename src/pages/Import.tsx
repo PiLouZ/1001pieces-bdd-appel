@@ -26,13 +26,10 @@ const Import: React.FC = () => {
   const safeKnownPartReferences = Array.isArray(knownPartReferences) ? knownPartReferences : [];
   const safeAllAppliances = Array.isArray(allAppliances) ? allAppliances : [];
 
-  // Fonction pour obtenir l'état le plus récent des appareils
-  const getAllAppliances = () => safeAllAppliances;
-
   const { handleImport } = useImportLogic({
     importAppliances,
     associateApplicancesToPartReference,
-    getAllAppliances
+    allAppliances: safeAllAppliances // Passage direct de l'état
   });
 
   const { safeAssociateAppliancesToPartReference } = useAssociationHandler(associateApplicancesToPartReference);
