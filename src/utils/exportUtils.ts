@@ -27,7 +27,7 @@ export function exportAppliances(appliances: Appliance[], options: ExportOptions
     ];
     
     // Start with headers if includeHeader is true
-    let csv = includeHeader ? headers.join("\t") + "\n" : "";
+    let csv = includeHeader ? headers.join(";") + "\n" : "";
     
     // Add each appliance as a row
     safeAppliances.forEach(appliance => {
@@ -57,7 +57,7 @@ export function exportAppliances(appliances: Appliance[], options: ExportOptions
         commercialRef
       ];
       
-      csv += row.join("\t") + "\n";
+      csv += row.join(";") + "\n";
     });
     
     return csv;
