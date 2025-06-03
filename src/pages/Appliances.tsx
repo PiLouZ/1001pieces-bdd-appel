@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,14 +21,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Appliance, ApplianceSelection, ApplianceEditable } from "@/types/appliance";
 import ApplianceEditDialog from "@/components/ApplianceEditDialog";
 import ApplianceList from "@/components/ApplianceList";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
+import DuplicateDetection from "@/components/DuplicateDetection";
+import ImportSessionFilter from "@/components/ImportSessionFilter";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -63,6 +58,8 @@ const Appliances: React.FC = () => {
   const [selectedPartRef, setSelectedPartRef] = useState("");
   const [newPartRef, setNewPartRef] = useState("");
   const [allowNewValue, setAllowNewValue] = useState(false);
+  const [selectedSession, setSelectedSession] = useState<string | null>(null);
+  const [showLastSessionOnly, setShowLastSessionOnly] = useState(false);
 
   useEffect(() => {
     const count = Object.keys(selectedAppliances).filter(id => selectedAppliances[id]).length;
@@ -72,6 +69,43 @@ const Appliances: React.FC = () => {
   const hasSelection = selectedCount > 0;
   const allSelected = appliances.length > 0 && selectedCount === appliances.length;
   const someSelected = selectedCount > 0 && selectedCount < appliances.length;
+
+  // Créer des sessions d'import simulées basées sur les dates d'ajout
+  const importSessions = useMemo(() => {
+    const sessionMap = new Map<string, { count: number; appliances: Appliance[] }>();
+    
+    allAppliances.forEach(appliance => {
+      const dateKey = appliance.dateAdded;
+      if (!sessionMap.has(dateKey)) {
+        sessionMap.set(dateKey, { count: 0, appliances: [] });
+      }
+      sessionMap.get(dateKey)!.count++;
+      sessionMap.get(dateKey)!.appliances.push(appliance);
+    });
+
+    return Array.from(sessionMap.entries())
+      .map(([dateAdded, data]) => ({
+        id: dateAdded,
+        dateAdded,
+        count: data.count,
+        appliances: data.appliances
+      }))
+      .sort((a, b) => new Date(b.dateAdded).getTime() - new Date(a.dateAdded).getTime());
+  }, [allAppliances]);
+
+  // Filtrer les appareils selon la session sélectionnée
+  const filteredBySession = useMemo(() => {
+    if (showLastSessionOnly && importSessions.length > 0) {
+      const lastSession = importSessions[0];
+      return appliances.filter(app => app.dateAdded === lastSession.dateAdded);
+    }
+    
+    if (selectedSession) {
+      return appliances.filter(app => app.dateAdded === selectedSession);
+    }
+    
+    return appliances;
+  }, [appliances, selectedSession, showLastSessionOnly, importSessions]);
 
   const handleEdit = (appliance: Appliance) => {
     setCurrentAppliance(appliance);
@@ -190,6 +224,22 @@ const Appliances: React.FC = () => {
     toast("Base de données nettoyée");
   };
 
+  const handleMergeDuplicates = (keepId: string, mergeIds: string[], mergedData: Partial<Appliance>) => {
+    // Mettre à jour l'appareil conservé avec les nouvelles données
+    const keepAppliance = allAppliances.find(a => a.id === keepId);
+    if (keepAppliance) {
+      updateAppliance({
+        ...keepAppliance,
+        ...mergedData
+      });
+    }
+
+    // Supprimer les appareils fusionnés
+    mergeIds.forEach(id => {
+      deleteAppliance(id);
+    });
+  };
+
   return (
     <div className="flex flex-col min-h-screen">
       <Navigation />
@@ -230,6 +280,24 @@ const Appliances: React.FC = () => {
             className="max-w-md"
           />
         </div>
+
+        {/* Filtrage par session d'import */}
+        <div className="mb-4">
+          <ImportSessionFilter
+            sessions={importSessions}
+            selectedSession={selectedSession}
+            onSessionChange={setSelectedSession}
+            showLastSessionOnly={showLastSessionOnly}
+            onToggleLastSession={() => setShowLastSessionOnly(!showLastSessionOnly)}
+          />
+        </div>
+
+        {/* Détection de doublons */}
+        <DuplicateDetection
+          appliances={filteredBySession}
+          onMergeDuplicates={handleMergeDuplicates}
+          onUpdateAppliance={updateAppliance}
+        />
         
         {/* Zone d'actions groupées */}
         <div className="mb-4">
@@ -274,7 +342,7 @@ const Appliances: React.FC = () => {
         
         {/* Liste des appareils */}
         <ApplianceList 
-          appliances={appliances} 
+          appliances={filteredBySession} 
           onEdit={handleEdit}
           onDelete={handleDelete}
           onToggleSelection={handleToggleSelection}
