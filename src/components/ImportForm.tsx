@@ -7,7 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Appliance, ImportSource } from "@/types/appliance";
 import { parseClipboardData } from "@/utils/importUtils";
 import { exportAppliances, generateCSVFile } from "@/utils/exportUtils";
-import MissingInfoForm from "./MissingInfoForm";
+import QuickEditForm from "./QuickEditForm";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -312,15 +312,14 @@ const ImportForm: React.FC<ImportFormProps> = ({
     setCsvExportData(null);
   };
 
-  // Si on a des appareils avec des infos manquantes, on affiche le formulaire pour les compléter
+  // Si on a des appareils avec des infos manquantes, on affiche le QuickEditForm pour les compléter
   if (appliancesWithMissingInfo.length > 0) {
     return (
-      <MissingInfoForm
+      <QuickEditForm
         appliances={appliancesWithMissingInfo}
+        onUpdateAppliances={handleCompleteMissingInfo}
         knownBrands={knownBrands || []}
         knownTypes={knownTypes || []}
-        onComplete={handleCompleteMissingInfo}
-        onCancel={handleCancelMissingInfo}
       />
     );
   }
