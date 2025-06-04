@@ -1,5 +1,12 @@
 import { Appliance, ImportSource } from "@/types/appliance";
 
+export interface ProcessedRow {
+  reference: string;
+  commercialRef?: string;
+  brand?: string;
+  type?: string;
+}
+
 export const parseClipboardData = (
   clipboardText: string,
   getApplianceByReference?: (ref: string) => Appliance | undefined,
@@ -116,7 +123,7 @@ const parseTwoColumnFormat = (
         reference,
         commercialRef,
         dateAdded: new Date().toISOString().split('T')[0],
-        importSource: "clipboard" as ImportSource,
+        source: "clipboard",
         lastUpdated: new Date().toISOString()
       };
       
@@ -169,7 +176,7 @@ const parseFourColumnFormat = (lines: string[]) => {
         reference,
         commercialRef,
         dateAdded: new Date().toISOString().split('T')[0],
-        importSource: "clipboard" as ImportSource,
+        source: "clipboard",
         lastUpdated: new Date().toISOString()
       };
       appliances.push(appliance);
