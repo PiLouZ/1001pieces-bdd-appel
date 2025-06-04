@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Appliance } from "@/types/appliance";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,9 +28,20 @@ const MassEditForm: React.FC<MassEditFormProps> = ({
   const [editMode, setEditMode] = useState<'brand' | 'type' | null>(null);
   const [editValue, setEditValue] = useState("");
   const [allowNewValue, setAllowNewValue] = useState(false);
+  const selectAllCheckboxRef = useRef<HTMLButtonElement>(null);
 
   const allSelected = selectedIds.size === appliances.length && appliances.length > 0;
   const someSelected = selectedIds.size > 0 && selectedIds.size < appliances.length;
+
+  // Update the indeterminate state when someSelected changes
+  useEffect(() => {
+    if (selectAllCheckboxRef.current) {
+      const checkboxElement = selectAllCheckboxRef.current.querySelector('input[type="checkbox"]') as HTMLInputElement;
+      if (checkboxElement) {
+        checkboxElement.indeterminate = someSelected;
+      }
+    }
+  }, [someSelected]);
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
@@ -132,9 +143,7 @@ const MassEditForm: React.FC<MassEditFormProps> = ({
           <div className="flex items-center space-x-2">
             <Checkbox
               checked={allSelected}
-              ref={(el) => {
-                if (el) el.indeterminate = someSelected;
-              }}
+              ref={selectAllCheckboxRef}
               onCheckedChange={handleSelectAll}
             />
             <Label className="text-sm font-medium">
