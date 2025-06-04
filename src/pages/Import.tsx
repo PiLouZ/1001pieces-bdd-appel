@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import Navigation from "@/components/Navigation";
 import { Import as ImportIcon } from "lucide-react";
 import ImportForm from "@/components/ImportForm";
+import QuickEditForm from "@/components/QuickEditForm";
 import { useAppliances } from "@/hooks/useAppliances";
 import { useImportLogic } from "@/hooks/useImportLogic";
 import { useAssociationHandler } from "@/components/AssociationHandler";
@@ -69,6 +70,18 @@ const Import: React.FC = () => {
             suggestBrand={safeSuggestBrand}
             suggestType={safeSuggestType}
             associateAppliancesToPartReference={safeAssociateAppliancesToPartReference}
+          />
+          
+          {/* Exemple d'utilisation du QuickEditForm - sera visible quand nécessaire */}
+          {/* Pour le moment, on peut l'afficher avec des données de test */}
+          <QuickEditForm
+            appliances={[]}
+            onUpdateAppliances={(updatedAppliances) => {
+              console.log("Appareils mis à jour:", updatedAppliances);
+              // Logique de mise à jour sera implémentée selon les besoins
+            }}
+            knownBrands={safeKnownBrands}
+            knownTypes={safeKnownTypes}
           />
         </div>
       </main>
