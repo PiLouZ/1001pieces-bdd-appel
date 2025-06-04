@@ -22,6 +22,7 @@ interface ImportFormProps {
   knownTypes: string[];
   knownPartReferences: string[];
   getApplianceByReference: (ref: string) => Appliance | undefined;
+  getApplianceByCommercialRef: (ref: string) => Appliance | undefined;
   suggestBrand: (ref: string) => string | null;
   suggestType: (ref: string, brand: string) => string | null;
   associateAppliancesToPartReference: (applianceIds: string[], partRef: string) => number;
@@ -33,6 +34,7 @@ const ImportForm: React.FC<ImportFormProps> = ({
   knownTypes, 
   knownPartReferences, 
   getApplianceByReference,
+  getApplianceByCommercialRef,
   suggestBrand,
   suggestType,
   associateAppliancesToPartReference
@@ -64,6 +66,7 @@ const ImportForm: React.FC<ImportFormProps> = ({
       const result = parseClipboardData(
         clipboardText, 
         getApplianceByReference,
+        getApplianceByCommercialRef,
         suggestBrand,
         suggestType
       );
@@ -174,6 +177,7 @@ const ImportForm: React.FC<ImportFormProps> = ({
       const result = parseClipboardData(
         text, 
         getApplianceByReference,
+        getApplianceByCommercialRef,
         suggestBrand,
         suggestType
       );

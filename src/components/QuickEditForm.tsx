@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from "react";
 import { Appliance } from "@/types/appliance";
 import { Button } from "@/components/ui/button";
@@ -173,7 +172,6 @@ const QuickEditForm: React.FC<QuickEditFormProps> = ({
                 {appliance.brand && (
                   <Copy 
                     className="absolute right-1 top-1 h-3 w-3 text-gray-400 cursor-grab" 
-                    title="Glisser pour recopier"
                   />
                 )}
               </div>
@@ -203,7 +201,6 @@ const QuickEditForm: React.FC<QuickEditFormProps> = ({
                 {appliance.type && (
                   <Copy 
                     className="absolute right-1 top-1 h-3 w-3 text-gray-400 cursor-grab" 
-                    title="Glisser pour recopier"
                   />
                 )}
               </div>
