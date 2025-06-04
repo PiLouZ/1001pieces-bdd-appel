@@ -70,23 +70,29 @@ const Appliances: React.FC = () => {
   const allSelected = appliances.length > 0 && selectedCount === appliances.length;
   const someSelected = selectedCount > 0 && selectedCount < appliances.length;
 
-  // Créer des sessions d'import simulées basées sur les dates d'ajout
+  // Créer des sessions d'import basées sur les importSessionId plutôt que sur les dates
   const importSessions = useMemo(() => {
     const sessionMap = new Map<string, { count: number; appliances: Appliance[] }>();
     
     allAppliances.forEach(appliance => {
-      const dateKey = appliance.dateAdded;
-      if (!sessionMap.has(dateKey)) {
-        sessionMap.set(dateKey, { count: 0, appliances: [] });
+      // Utiliser importSessionId s'il existe, sinon fallback sur dateAdded pour la compatibilité
+      const sessionKey = (appliance as any).importSessionId || appliance.dateAdded;
+      if (!sessionMap.has(sessionKey)) {
+        sessionMap.set(sessionKey, { count: 0, appliances: [] });
       }
-      sessionMap.get(dateKey)!.count++;
-      sessionMap.get(dateKey)!.appliances.push(appliance);
+      sessionMap.get(sessionKey)!.count++;
+      sessionMap.get(sessionKey)!.appliances.push(appliance);
     });
 
     return Array.from(sessionMap.entries())
-      .map(([dateAdded, data]) => ({
-        id: dateAdded,
-        dateAdded,
+      .map(([sessionId, data]) => ({
+        id: sessionId,
+        name: sessionId.startsWith('import-') ? 
+          `Session ${new Date(parseInt(sessionId.replace('import-', ''))).toLocaleString()}` : 
+          `Session du ${sessionId}`,
+        dateAdded: sessionId.startsWith('import-') ? 
+          new Date(parseInt(sessionId.replace('import-', ''))).toISOString().split('T')[0] :
+          sessionId,
         count: data.count,
         appliances: data.appliances
       }))
@@ -97,11 +103,17 @@ const Appliances: React.FC = () => {
   const filteredBySession = useMemo(() => {
     if (showLastSessionOnly && importSessions.length > 0) {
       const lastSession = importSessions[0];
-      return appliances.filter(app => app.dateAdded === lastSession.dateAdded);
+      return appliances.filter(app => {
+        const sessionKey = (app as any).importSessionId || app.dateAdded;
+        return sessionKey === lastSession.id;
+      });
     }
     
     if (selectedSession) {
-      return appliances.filter(app => app.dateAdded === selectedSession);
+      return appliances.filter(app => {
+        const sessionKey = (app as any).importSessionId || app.dateAdded;
+        return sessionKey === selectedSession;
+      });
     }
     
     return appliances;
@@ -225,6 +237,25 @@ const Appliances: React.FC = () => {
   };
 
   const handleMergeDuplicates = (keepId: string, mergeIds: string[], mergedData: Partial<Appliance>) => {
+    console.log("🔗 Début fusion des appareils avec gestion des pièces compatibles");
+    
+    // Collecter toutes les références de pièces des appareils à fusionner
+    const allPartReferences = new Set<string>();
+    
+    // Récupérer les références de pièces de l'appareil à conserver
+    const keepAppliancePartRefs = getPartReferencesForAppliance ? getPartReferencesForAppliance(keepId) : [];
+    keepAppliancePartRefs.forEach(ref => allPartReferences.add(ref));
+    console.log(`   - Pièces de l'appareil conservé (${keepId}):`, keepAppliancePartRefs);
+    
+    // Récupérer les références de pièces des appareils à supprimer
+    mergeIds.forEach(mergeId => {
+      const mergeAppliancePartRefs = getPartReferencesForAppliance ? getPartReferencesForAppliance(mergeId) : [];
+      mergeAppliancePartRefs.forEach(ref => allPartReferences.add(ref));
+      console.log(`   - Pièces de l'appareil à supprimer (${mergeId}):`, mergeAppliancePartRefs);
+    });
+    
+    console.log("   - Toutes les références de pièces à fusionner:", Array.from(allPartReferences));
+    
     // Mettre à jour l'appareil conservé avec les nouvelles données
     const keepAppliance = allAppliances.find(a => a.id === keepId);
     if (keepAppliance) {
@@ -232,12 +263,28 @@ const Appliances: React.FC = () => {
         ...keepAppliance,
         ...mergedData
       });
+      console.log("   - Appareil conservé mis à jour");
     }
 
     // Supprimer les appareils fusionnés
     mergeIds.forEach(id => {
       deleteAppliance(id);
+      console.log(`   - Appareil supprimé: ${id}`);
     });
+    
+    // Associer toutes les références de pièces collectées à l'appareil conservé
+    if (allPartReferences.size > 0 && associateApplicancesToPartReference) {
+      Array.from(allPartReferences).forEach(partRef => {
+        console.log(`   - Association de la pièce ${partRef} à l'appareil conservé ${keepId}`);
+        associateApplicancesToPartReference([keepId], partRef);
+      });
+      
+      toast(`${mergeIds.length + 1} appareils fusionnés avec ${allPartReferences.size} références de pièces consolidées`);
+    } else {
+      toast(`${mergeIds.length + 1} appareils fusionnés`);
+    }
+    
+    console.log("🔗 Fin fusion des appareils");
   };
 
   return (

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from "react";
 import { Appliance } from "@/types/appliance";
 import { Button } from "@/components/ui/button";
@@ -43,6 +42,11 @@ const MassEditForm: React.FC<MassEditFormProps> = ({
     }
   }, [someSelected]);
 
+  // Réinitialiser la sélection quand la liste des appareils change
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [appliances]);
+
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
       setSelectedIds(new Set(appliances.map(a => a.id)));
@@ -74,6 +78,11 @@ const MassEditForm: React.FC<MassEditFormProps> = ({
   const applyEdit = () => {
     if (!editMode || !editValue.trim() || selectedIds.size === 0) return;
 
+    console.log("🔧 Application de l'édition massive:");
+    console.log("   - Champ:", editMode);
+    console.log("   - Valeur:", editValue);
+    console.log("   - IDs sélectionnés:", Array.from(selectedIds));
+
     const updates = {
       ids: Array.from(selectedIds),
       [editMode]: editValue.trim()
@@ -86,7 +95,7 @@ const MassEditForm: React.FC<MassEditFormProps> = ({
     setEditValue("");
     setSelectedIds(new Set());
     
-    toast(`${selectedIds.size} appareils mis à jour`);
+    toast(`${selectedIds.size} appareils mis à jour avec ${editMode === 'brand' ? 'la marque' : 'le type'} "${editValue.trim()}"`);
   };
 
   const cancelEdit = () => {
