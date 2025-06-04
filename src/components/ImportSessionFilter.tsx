@@ -35,6 +35,14 @@ const ImportSessionFilter: React.FC<ImportSessionFilterProps> = ({
 }) => {
   const lastSession = sessions.length > 0 ? sessions[0] : null;
 
+  const handleSelectChange = (value: string) => {
+    if (value === "all") {
+      onSessionChange(null);
+    } else {
+      onSessionChange(value);
+    }
+  };
+
   return (
     <div className="flex flex-wrap gap-2 items-center">
       <div className="flex items-center gap-2">
@@ -59,12 +67,12 @@ const ImportSessionFilter: React.FC<ImportSessionFilterProps> = ({
         </Button>
       )}
 
-      <Select value={selectedSession || ""} onValueChange={(value) => onSessionChange(value || null)}>
+      <Select value={selectedSession || "all"} onValueChange={handleSelectChange}>
         <SelectTrigger className="w-48">
           <SelectValue placeholder="Toutes les sessions" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="">Toutes les sessions</SelectItem>
+          <SelectItem value="all">Toutes les sessions</SelectItem>
           {sessions.map((session) => (
             <SelectItem key={session.id} value={session.id}>
               <div className="flex items-center justify-between w-full">
