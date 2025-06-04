@@ -1,3 +1,4 @@
+
 import { Appliance, ImportSource } from "@/types/appliance";
 
 export interface ProcessedRow {
@@ -10,6 +11,7 @@ export interface ProcessedRow {
 export const parseClipboardData = (
   clipboardText: string,
   getApplianceByReference?: (ref: string) => Appliance | undefined,
+  getApplianceByCommercialRef?: (ref: string) => Appliance | undefined,
   suggestBrand?: (ref: string) => string | null,
   suggestType?: (ref: string, brand: string) => string | null
 ): {
@@ -38,7 +40,7 @@ export const parseClipboardData = (
 
     if (columns === 2) {
       // Format à 2 colonnes : Référence technique, Référence commerciale
-      return parseTwoColumnFormat(lines, getApplianceByReference, suggestBrand, suggestType);
+      return parseTwoColumnFormat(lines, getApplianceByReference, getApplianceByCommercialRef, suggestBrand, suggestType);
     } else if (columns >= 4) {
       // Format à 4 colonnes : Type, Marque, Référence technique, Référence commerciale
       return parseFourColumnFormat(lines);
@@ -65,6 +67,7 @@ export const parseClipboardData = (
 const parseTwoColumnFormat = (
   lines: string[],
   getApplianceByReference?: (ref: string) => Appliance | undefined,
+  getApplianceByCommercialRef?: (ref: string) => Appliance | undefined,
   suggestBrand?: (ref: string) => string | null,
   suggestType?: (ref: string, brand: string) => string | null
 ) => {
@@ -79,14 +82,25 @@ const parseTwoColumnFormat = (
       const reference = parts[0];
       const commercialRef = parts[1];
       
-      // Chercher d'abord une correspondance exacte par référence technique
+      console.log(`🔍 Recherche de correspondance pour référence technique: ${reference}, commerciale: ${commercialRef}`);
+      
+      // Étape 1: Chercher d'abord une correspondance exacte par référence technique
       let exactMatch = getApplianceByReference ? getApplianceByReference(reference) : undefined;
       
-      // Si pas trouvé par référence technique, chercher par référence commerciale
-      if (!exactMatch && getApplianceByReference) {
-        // Cette fonction devrait être étendue pour chercher aussi par référence commerciale
-        // Pour l'instant, on simule cette recherche
-        exactMatch = undefined; // TODO: implémenter la recherche par commercialRef
+      if (exactMatch) {
+        console.log(`✅ Correspondance exacte trouvée par référence technique: ${reference} -> ${exactMatch.brand} ${exactMatch.type}`);
+      } else {
+        console.log(`❌ Aucune correspondance par référence technique: ${reference}`);
+        
+        // Étape 2: Si pas trouvé par référence technique, chercher par référence commerciale
+        if (commercialRef && getApplianceByCommercialRef) {
+          exactMatch = getApplianceByCommercialRef(commercialRef);
+          if (exactMatch) {
+            console.log(`✅ Correspondance exacte trouvée par référence commerciale: ${commercialRef} -> ${exactMatch.brand} ${exactMatch.type}`);
+          } else {
+            console.log(`❌ Aucune correspondance par référence commerciale: ${commercialRef}`);
+          }
+        }
       }
       
       let brand = "";
@@ -97,10 +111,10 @@ const parseTwoColumnFormat = (
         // Correspondance exacte trouvée, utiliser les données existantes
         brand = exactMatch.brand || "";
         type = exactMatch.type || "";
-        console.log(`Correspondance exacte trouvée pour ${reference}: ${brand} ${type}`);
+        console.log(`📋 Utilisation des données existantes: ${brand} ${type}`);
       } else {
         // Aucune correspondance exacte, demander à l'utilisateur
-        console.log(`Aucune correspondance exacte pour ${reference}, demande d'intervention utilisateur`);
+        console.log(`⚠️ Aucune correspondance exacte pour ${reference}/${commercialRef}, demande d'intervention utilisateur`);
         needsCompletion = true;
         
         // On peut suggérer mais ne pas auto-compléter
@@ -109,10 +123,10 @@ const parseTwoColumnFormat = (
         
         // Les suggestions seront présentées à l'utilisateur, mais pas auto-appliquées
         if (suggestedBrand) {
-          console.log(`Suggestion de marque pour ${reference}: ${suggestedBrand}`);
+          console.log(`💡 Suggestion de marque pour ${reference}: ${suggestedBrand}`);
         }
         if (suggestedType) {
-          console.log(`Suggestion de type pour ${reference}: ${suggestedType}`);
+          console.log(`💡 Suggestion de type pour ${reference}: ${suggestedType}`);
         }
       }
       

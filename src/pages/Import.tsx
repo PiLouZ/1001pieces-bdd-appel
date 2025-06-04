@@ -26,10 +26,10 @@ const Import: React.FC = () => {
   const safeKnownPartReferences = Array.isArray(knownPartReferences) ? knownPartReferences : [];
   const safeAllAppliances = Array.isArray(allAppliances) ? allAppliances : [];
 
-  const { handleImport } = useImportLogic({
+  const { handleImport, getApplianceByCommercialRef } = useImportLogic({
     importAppliances,
     associateApplicancesToPartReference,
-    allAppliances: safeAllAppliances // Passage direct de l'état
+    allAppliances: safeAllAppliances
   });
 
   const { safeAssociateAppliancesToPartReference } = useAssociationHandler(associateApplicancesToPartReference);
@@ -65,6 +65,7 @@ const Import: React.FC = () => {
             knownTypes={safeKnownTypes}
             knownPartReferences={safeKnownPartReferences}
             getApplianceByReference={getApplianceByReference}
+            getApplianceByCommercialRef={getApplianceByCommercialRef}
             suggestBrand={safeSuggestBrand}
             suggestType={safeSuggestType}
             associateAppliancesToPartReference={safeAssociateAppliancesToPartReference}

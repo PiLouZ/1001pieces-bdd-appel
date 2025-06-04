@@ -177,8 +177,21 @@ export const useImportLogic = ({
     }
   }, [importAppliances, associateApplicancesToPartReference, allAppliances, isProcessing]);
 
+  // Nouvelle fonction pour rechercher par référence commerciale
+  const getApplianceByCommercialRef = useCallback((commercialRef: string): Appliance | undefined => {
+    console.log(`🔍 Recherche par référence commerciale: ${commercialRef}`);
+    const found = allAppliances.find(a => a.commercialRef === commercialRef);
+    if (found) {
+      console.log(`✅ Trouvé par commercialRef: ${commercialRef} -> ${found.brand} ${found.type}`);
+    } else {
+      console.log(`❌ Pas trouvé par commercialRef: ${commercialRef}`);
+    }
+    return found;
+  }, [allAppliances]);
+
   return {
     handleImport,
-    isProcessing
+    isProcessing,
+    getApplianceByCommercialRef
   };
 };
