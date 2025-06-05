@@ -257,6 +257,129 @@ const Appliances: React.FC = () => {
     return items;
   };
 
+  const handleClearDatabase = async () => {
+    try {
+      await clearDatabase();
+      toast.success("Base de données nettoyée");
+    } catch (error) {
+      toast.error("Erreur lors du nettoyage");
+    }
+  };
+
+  const handleMergeDuplicates = (duplicates: Appliance[]) => {
+    // Implementation for merging duplicates
+    console.log("Merging duplicates:", duplicates);
+  };
+
+  const handleEdit = (appliance: Appliance) => {
+    setCurrentAppliance(appliance);
+    setEditDialogOpen(true);
+  };
+
+  const handleDelete = (id: string) => {
+    setCurrentAppliance(allAppliances.find(app => app.id === id) || null);
+    setDeleteMultiple(false);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleToggleSelection = (id: string, selected: boolean) => {
+    setSelectedAppliances(prev => ({
+      ...prev,
+      [id]: selected
+    }));
+  };
+
+  const handleSelectAll = (selected: boolean) => {
+    const newSelection: ApplianceSelection = {};
+    if (selected) {
+      paginatedAppliances.forEach(appliance => {
+        newSelection[appliance.id] = true;
+      });
+    }
+    setSelectedAppliances(newSelection);
+  };
+
+  const handleUpdateSelection = (field: "brand" | "type") => {
+    setUpdateField(field);
+    setUpdateValue("");
+    setAllowNewValue(false);
+    setUpdateSelectionDialogOpen(true);
+  };
+
+  const handleDeleteSelection = () => {
+    setDeleteMultiple(true);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleAssociateToPartRef = () => {
+    setSelectedPartRef("");
+    setNewPartRef("");
+    setAssociateDialogOpen(true);
+  };
+
+  const handleRemoveAssociation = (applianceId: string, partRef: string) => {
+    if (removeAppliancePartAssociation) {
+      removeAppliancePartAssociation(applianceId, partRef);
+      toast.success("Association supprimée");
+    }
+  };
+
+  const handleSaveEdit = (appliance: Appliance) => {
+    updateAppliance(appliance);
+    setEditDialogOpen(false);
+    setCurrentAppliance(null);
+    toast.success("Appareil modifié");
+  };
+
+  const confirmDelete = async () => {
+    if (deleteMultiple) {
+      const idsToDelete = Object.keys(selectedAppliances).filter(id => selectedAppliances[id]);
+      for (const id of idsToDelete) {
+        await deleteAppliance(id);
+      }
+      setSelectedAppliances({});
+      toast.success(`${idsToDelete.length} appareils supprimés`);
+    } else if (currentAppliance) {
+      await deleteAppliance(currentAppliance.id);
+      toast.success("Appareil supprimé");
+    }
+    setDeleteDialogOpen(false);
+    setCurrentAppliance(null);
+  };
+
+  const confirmUpdateSelection = async () => {
+    const idsToUpdate = Object.keys(selectedAppliances).filter(id => selectedAppliances[id]);
+    
+    for (const id of idsToUpdate) {
+      const appliance = allAppliances.find(app => app.id === id);
+      if (appliance) {
+        await updateAppliance({
+          ...appliance,
+          [updateField]: updateValue
+        });
+      }
+    }
+    
+    setSelectedAppliances({});
+    setUpdateSelectionDialogOpen(false);
+    toast.success(`${idsToUpdate.length} appareils mis à jour`);
+  };
+
+  const confirmAssociateToPartRef = async () => {
+    const idsToAssociate = Object.keys(selectedAppliances).filter(id => selectedAppliances[id]);
+    const partRef = selectedPartRef || newPartRef;
+    
+    if (associateApplicancesToPartReference && partRef) {
+      const count = associateApplicancesToPartReference(idsToAssociate, partRef);
+      toast.success(`${count} appareils associés à la pièce ${partRef}`);
+    }
+    
+    setSelectedAppliances({});
+    setAssociateDialogOpen(false);
+    setSelectedPartRef("");
+    setNewPartRef("");
+  };
+
   return (
     <div className="flex flex-col min-h-screen">
       <Navigation />

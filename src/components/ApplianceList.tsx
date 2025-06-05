@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useCallback } from "react";
 import { Appliance, ApplianceSelection, ApplianceEditable } from "@/types/appliance";
 import { Button } from "@/components/ui/button";
@@ -419,6 +418,7 @@ const ApplianceList: React.FC<ApplianceListProps> = ({
         ) : (
           <List
             height={Math.min(CONTAINER_HEIGHT, sortedAppliances.length * ITEM_HEIGHT)}
+            width="100%"
             itemCount={sortedAppliances.length}
             itemSize={ITEM_HEIGHT}
             overscanCount={5}
