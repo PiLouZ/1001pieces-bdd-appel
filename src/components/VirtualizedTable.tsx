@@ -214,6 +214,7 @@ const VirtualizedTable: React.FC<VirtualizedTableProps> = ({
       <List
         ref={listRef}
         height={height}
+        width="100%"
         itemCount={appliances.length}
         itemSize={ROW_HEIGHT}
         itemData={appliances}
