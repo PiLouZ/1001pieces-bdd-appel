@@ -266,9 +266,32 @@ const Appliances: React.FC = () => {
     }
   };
 
-  const handleMergeDuplicates = (duplicates: Appliance[]) => {
-    // Implementation for merging duplicates
-    console.log("Merging duplicates:", duplicates);
+  const handleMergeDuplicates = async (keepId: string, mergeIds: string[], mergedData: Partial<Appliance>) => {
+    try {
+      // Find the appliance to keep
+      const keepAppliance = allAppliances.find(app => app.id === keepId);
+      if (!keepAppliance) {
+        toast.error("Appareil à conserver non trouvé");
+        return;
+      }
+
+      // Update the kept appliance with merged data
+      await updateAppliance({
+        ...keepAppliance,
+        ...mergedData,
+        lastUpdated: new Date().toISOString()
+      });
+
+      // Delete the merged appliances
+      for (const id of mergeIds) {
+        await deleteAppliance(id);
+      }
+
+      toast.success(`${mergeIds.length + 1} appareils fusionnés avec succès`);
+    } catch (error) {
+      toast.error("Erreur lors de la fusion des appareils");
+      console.error("Error merging duplicates:", error);
+    }
   };
 
   const handleEdit = (appliance: Appliance) => {
