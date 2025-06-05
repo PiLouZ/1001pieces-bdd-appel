@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,6 +8,8 @@ import { toast } from "sonner";
 import SearchableSelect from "./SearchableSelect";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { useExcelFill } from "@/hooks/useExcelFill";
+import VirtualizedTable from "./VirtualizedTable";
 
 interface QuickEditFormProps {
   appliances: Appliance[];
@@ -31,11 +32,26 @@ const QuickEditForm: React.FC<QuickEditFormProps> = ({
   const [sortDirection, setSortDirection] = useState<SortDirection>(null);
   const [availableBrands, setAvailableBrands] = useState<string[]>(knownBrands);
   const [availableTypes, setAvailableTypes] = useState<string[]>(knownTypes);
+  
+  // Utiliser la table virtualisée pour les gros volumes (> 1000 items)
+  const useVirtualized = editedAppliances.length > 1000;
+
+  const { fillDown, autoFill, dragFill } = useExcelFill({
+    appliances: editedAppliances,
+    onUpdateAppliances: setEditedAppliances
+  });
 
   const handleApplianceChange = (index: number, field: keyof Appliance, value: string) => {
     const updated = [...editedAppliances];
     updated[index] = { ...updated[index], [field]: value };
     setEditedAppliances(updated);
+  };
+
+  const handleFieldChange = (id: string, field: 'brand' | 'type', value: string) => {
+    const index = editedAppliances.findIndex(app => app.id === id);
+    if (index !== -1) {
+      handleApplianceChange(index, field, value);
+    }
   };
 
   const handleSort = (field: SortField) => {
@@ -104,6 +120,22 @@ const QuickEditForm: React.FC<QuickEditFormProps> = ({
     handleApplianceChange(index, 'type', value);
   };
 
+  const handleFillDown = (index: number, field: 'brand' | 'type') => {
+    fillDown(index, field);
+    toast.success(`Valeur copiée vers les cellules suivantes`);
+  };
+
+  const handleAutoFill = (index: number, field: 'brand' | 'type') => {
+    autoFill(index, field);
+    toast.success(`Valeur copiée automatiquement vers toutes les cellules vides`);
+  };
+
+  const handleDragFill = (fromIndex: number, toIndex: number, field: 'brand' | 'type') => {
+    dragFill(fromIndex, toIndex, field);
+    const count = toIndex - fromIndex;
+    toast.success(`Valeur copiée sur ${count} cellules`);
+  };
+
   const handleSubmit = () => {
     // Vérifier que tous les champs obligatoires sont remplis
     const incomplete = editedAppliances.filter(app => !app.brand || !app.type);
@@ -120,6 +152,40 @@ const QuickEditForm: React.FC<QuickEditFormProps> = ({
     // Revenir à la liste d'import ou fermer le formulaire
     window.history.back();
   };
+
+  if (useVirtualized) {
+    return (
+      <Card className="w-full">
+        <CardHeader>
+          <CardTitle>Compléter les informations manquantes</CardTitle>
+          <p className="text-sm text-gray-600">
+            {editedAppliances.length} appareils nécessitent des informations supplémentaires (Mode virtualisé pour les performances)
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <VirtualizedTable
+            appliances={editedAppliances}
+            onFieldChange={handleFieldChange}
+            knownBrands={availableBrands}
+            knownTypes={availableTypes}
+            onFillDown={handleFillDown}
+            onCopyToAll={handleAutoFill}
+            onDragFill={handleDragFill}
+            height={600}
+          />
+          
+          <div className="flex justify-end space-x-2 pt-4">
+            <Button variant="outline" onClick={handleCancel}>
+              Annuler
+            </Button>
+            <Button onClick={handleSubmit}>
+              Valider l'importation
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card className="w-full">
@@ -152,8 +218,8 @@ const QuickEditForm: React.FC<QuickEditFormProps> = ({
                     {getSortIcon('commercialRef')}
                   </div>
                 </TableHead>
-                <TableHead className="min-w-[200px]">Marque *</TableHead>
-                <TableHead className="min-w-[200px]">Type *</TableHead>
+                <TableHead className="min-w-[250px]">Marque *</TableHead>
+                <TableHead className="min-w-[250px]">Type *</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -183,6 +249,9 @@ const QuickEditForm: React.FC<QuickEditFormProps> = ({
                       emptyMessage="Aucune marque trouvée"
                       className="w-full border-0 focus:ring-1 focus:ring-blue-500"
                       allowCustomValue={true}
+                      showFillHandle={true}
+                      onFillDown={() => handleFillDown(index, 'brand')}
+                      onDoubleClickFill={() => handleAutoFill(index, 'brand')}
                     />
                   </TableCell>
                   <TableCell>
@@ -195,6 +264,9 @@ const QuickEditForm: React.FC<QuickEditFormProps> = ({
                       emptyMessage="Aucun type trouvé"
                       className="w-full border-0 focus:ring-1 focus:ring-blue-500"
                       allowCustomValue={true}
+                      showFillHandle={true}
+                      onFillDown={() => handleFillDown(index, 'type')}
+                      onDoubleClickFill={() => handleAutoFill(index, 'type')}
                     />
                   </TableCell>
                 </TableRow>
