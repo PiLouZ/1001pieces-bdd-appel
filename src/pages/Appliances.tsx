@@ -26,13 +26,28 @@ import ImportSessionFilter from "@/components/ImportSessionFilter";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useDebounce } from "@/hooks/useDebounce";
+import { useSearchIndex } from "@/hooks/useSearchIndex";
+import { useChunkedPagination } from "@/hooks/useChunkedPagination";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+  PaginationEllipsis,
+} from "@/components/ui/pagination";
+
+const ITEMS_PER_PAGE = 100;
+const CHUNK_SIZE = 5; // 5 pages par chunk
 
 const Appliances: React.FC = () => {
   const {
-    appliances,
+    appliances: allAppliancesFromHook,
     allAppliances,
-    searchQuery,
-    setSearchQuery,
+    searchQuery: hookSearchQuery,
+    setSearchQuery: setHookSearchQuery,
     updateAppliance,
     deleteAppliance,
     clearDatabase,
@@ -44,6 +59,9 @@ const Appliances: React.FC = () => {
     removeAppliancePartAssociation
   } = useAppliances();
 
+  const [localSearchQuery, setLocalSearchQuery] = useState("");
+  const debouncedSearchQuery = useDebounce(localSearchQuery, 300);
+  
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [currentAppliance, setCurrentAppliance] = useState<Appliance | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -61,21 +79,19 @@ const Appliances: React.FC = () => {
   const [selectedSession, setSelectedSession] = useState<string | null>(null);
   const [showLastSessionOnly, setShowLastSessionOnly] = useState(false);
 
-  useEffect(() => {
-    const count = Object.keys(selectedAppliances).filter(id => selectedAppliances[id]).length;
-    setSelectedCount(count);
-  }, [selectedAppliances]);
+  // Index de recherche optimisé
+  const { searchAppliances } = useSearchIndex(allAppliances);
 
-  const hasSelection = selectedCount > 0;
-  const allSelected = appliances.length > 0 && selectedCount === appliances.length;
-  const someSelected = selectedCount > 0 && selectedCount < appliances.length;
+  // Appliances filtrées par recherche
+  const searchFilteredAppliances = useMemo(() => {
+    return searchAppliances(debouncedSearchQuery);
+  }, [searchAppliances, debouncedSearchQuery]);
 
-  // Créer des sessions d'import basées sur les importSessionId plutôt que sur les dates
+  // Sessions d'import
   const importSessions = useMemo(() => {
     const sessionMap = new Map<string, { count: number; appliances: Appliance[] }>();
     
     allAppliances.forEach(appliance => {
-      // Utiliser importSessionId s'il existe, sinon fallback sur dateAdded pour la compatibilité
       const sessionKey = (appliance as any).importSessionId || appliance.dateAdded;
       if (!sessionMap.has(sessionKey)) {
         sessionMap.set(sessionKey, { count: 0, appliances: [] });
@@ -99,192 +115,146 @@ const Appliances: React.FC = () => {
       .sort((a, b) => new Date(b.dateAdded).getTime() - new Date(a.dateAdded).getTime());
   }, [allAppliances]);
 
-  // Filtrer les appareils selon la session sélectionnée
-  const filteredBySession = useMemo(() => {
+  // Filtrage par session
+  const sessionFilteredAppliances = useMemo(() => {
     if (showLastSessionOnly && importSessions.length > 0) {
       const lastSession = importSessions[0];
-      return appliances.filter(app => {
+      return searchFilteredAppliances.filter(app => {
         const sessionKey = (app as any).importSessionId || app.dateAdded;
         return sessionKey === lastSession.id;
       });
     }
     
     if (selectedSession) {
-      return appliances.filter(app => {
+      return searchFilteredAppliances.filter(app => {
         const sessionKey = (app as any).importSessionId || app.dateAdded;
         return sessionKey === selectedSession;
       });
     }
     
-    return appliances;
-  }, [appliances, selectedSession, showLastSessionOnly, importSessions]);
+    return searchFilteredAppliances;
+  }, [searchFilteredAppliances, selectedSession, showLastSessionOnly, importSessions]);
 
-  const handleEdit = (appliance: Appliance) => {
-    setCurrentAppliance(appliance);
-    setEditDialogOpen(true);
-  };
+  // Pagination par chunks
+  const {
+    currentData: paginatedAppliances,
+    currentPage,
+    totalPages,
+    totalItems,
+    availablePages,
+    goToPage,
+    nextPage,
+    prevPage,
+    preloadAdjacentChunks,
+    reset: resetPagination,
+    hasNextPage,
+    hasPrevPage
+  } = useChunkedPagination({
+    data: sessionFilteredAppliances,
+    itemsPerPage: ITEMS_PER_PAGE,
+    chunkSize: CHUNK_SIZE
+  });
 
-  const handleSaveEdit = (appliance: Appliance) => {
-    updateAppliance(appliance);
-    setEditDialogOpen(false);
-    setCurrentAppliance(null);
-    toast("Appareil mis à jour avec succès");
-  };
+  // Précharger les chunks adjacents
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      preloadAdjacentChunks();
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [currentPage, preloadAdjacentChunks]);
 
-  const handleDelete = (id: string) => {
-    setCurrentAppliance({ id } as Appliance);
-    setDeleteMultiple(false);
-    setDeleteDialogOpen(true);
-  };
+  // Réinitialiser la pagination lors des changements de filtres
+  useEffect(() => {
+    resetPagination();
+  }, [debouncedSearchQuery, selectedSession, showLastSessionOnly, resetPagination]);
 
-  const confirmDelete = () => {
-    if (deleteMultiple) {
-      Object.keys(selectedAppliances).forEach(id => {
-        if (selectedAppliances[id]) {
-          deleteAppliance(id);
-        }
-      });
-      setSelectedAppliances({});
-      toast(`${selectedCount} appareils supprimés`);
-    } else if (currentAppliance) {
-      deleteAppliance(currentAppliance.id);
-      toast("Appareil supprimé avec succès");
-    }
-    setDeleteDialogOpen(false);
-    setCurrentAppliance(null);
-  };
+  useEffect(() => {
+    const count = Object.keys(selectedAppliances).filter(id => selectedAppliances[id]).length;
+    setSelectedCount(count);
+  }, [selectedAppliances]);
 
-  const handleToggleSelection = (id: string, selected: boolean) => {
-    setSelectedAppliances(prev => ({
-      ...prev,
-      [id]: selected
-    }));
-  };
+  const hasSelection = selectedCount > 0;
+  const allSelected = paginatedAppliances.length > 0 && selectedCount === paginatedAppliances.length;
+  const someSelected = selectedCount > 0 && selectedCount < paginatedAppliances.length;
 
-  const handleSelectAll = (checked: boolean) => {
-    if (checked) {
-      const newSelection: ApplianceSelection = {};
-      appliances.forEach(appliance => {
-        newSelection[appliance.id] = true;
-      });
-      setSelectedAppliances(newSelection);
+  // Génération de la pagination
+  const renderPaginationItems = () => {
+    const items = [];
+    const maxVisible = 7;
+    
+    if (totalPages <= maxVisible) {
+      for (let i = 1; i <= totalPages; i++) {
+        items.push(
+          <PaginationItem key={i}>
+            <PaginationLink
+              onClick={() => goToPage(i)}
+              isActive={currentPage === i}
+              className="cursor-pointer"
+            >
+              {i}
+            </PaginationLink>
+          </PaginationItem>
+        );
+      }
     } else {
-      setSelectedAppliances({});
-    }
-  };
+      items.push(
+        <PaginationItem key={1}>
+          <PaginationLink
+            onClick={() => goToPage(1)}
+            isActive={currentPage === 1}
+            className="cursor-pointer"
+          >
+            1
+          </PaginationLink>
+        </PaginationItem>
+      );
 
-  const handleUpdateSelection = (field: "brand" | "type") => {
-    setUpdateField(field);
-    setUpdateValue("");
-    setAllowNewValue(false);
-    setUpdateSelectionDialogOpen(true);
-  };
+      if (currentPage > 4) {
+        items.push(
+          <PaginationItem key="ellipsis1">
+            <PaginationEllipsis />
+          </PaginationItem>
+        );
+      }
 
-  const confirmUpdateSelection = () => {
-    const ids = Object.keys(selectedAppliances).filter(id => selectedAppliances[id]);
-    const updates = updateField === "brand" ? { brand: updateValue } : { type: updateValue };
-    
-    if (ids.length > 0) {
-      ids.forEach(id => {
-        const appliance = appliances.find(app => app.id === id);
-        if (appliance) {
-          updateAppliance({
-            ...appliance,
-            ...updates
-          });
-        }
-      });
-      
-      toast(`${ids.length} appareils mis à jour avec succès`);
-    }
-    
-    setUpdateSelectionDialogOpen(false);
-    setSelectedAppliances({});
-  };
+      for (let i = Math.max(2, currentPage - 2); i <= Math.min(totalPages - 1, currentPage + 2); i++) {
+        items.push(
+          <PaginationItem key={i}>
+            <PaginationLink
+              onClick={() => goToPage(i)}
+              isActive={currentPage === i}
+              className="cursor-pointer"
+            >
+              {i}
+            </PaginationLink>
+          </PaginationItem>
+        );
+      }
 
-  const handleDeleteSelection = () => {
-    setDeleteMultiple(true);
-    setDeleteDialogOpen(true);
-  };
+      if (currentPage < totalPages - 3) {
+        items.push(
+          <PaginationItem key="ellipsis2">
+            <PaginationEllipsis />
+          </PaginationItem>
+        );
+      }
 
-  const handleAssociateToPartRef = () => {
-    setAssociateDialogOpen(true);
-  };
-
-  const confirmAssociateToPartRef = () => {
-    const ids = Object.keys(selectedAppliances).filter(id => selectedAppliances[id]);
-    const partRef = selectedPartRef || newPartRef;
-
-    if (ids.length > 0 && partRef) {
-      associateApplicancesToPartReference(ids, partRef);
-      toast(`${ids.length} appareils associés à la référence ${partRef}`);
-    }
-
-    setAssociateDialogOpen(false);
-    setSelectedAppliances({});
-    setSelectedPartRef("");
-    setNewPartRef("");
-  };
-
-  const handleRemoveAssociation = (applianceId: string, partRef: string) => {
-    removeAppliancePartAssociation(applianceId, partRef);
-    toast(`Association avec la référence "${partRef}" supprimée`);
-  };
-
-  const handleClearDatabase = () => {
-    clearDatabase();
-    toast("Base de données nettoyée");
-  };
-
-  const handleMergeDuplicates = (keepId: string, mergeIds: string[], mergedData: Partial<Appliance>) => {
-    console.log("🔗 Début fusion des appareils avec gestion des pièces compatibles");
-    
-    // Collecter toutes les références de pièces des appareils à fusionner
-    const allPartReferences = new Set<string>();
-    
-    // Récupérer les références de pièces de l'appareil à conserver
-    const keepAppliancePartRefs = getPartReferencesForAppliance ? getPartReferencesForAppliance(keepId) : [];
-    keepAppliancePartRefs.forEach(ref => allPartReferences.add(ref));
-    console.log(`   - Pièces de l'appareil conservé (${keepId}):`, keepAppliancePartRefs);
-    
-    // Récupérer les références de pièces des appareils à supprimer
-    mergeIds.forEach(mergeId => {
-      const mergeAppliancePartRefs = getPartReferencesForAppliance ? getPartReferencesForAppliance(mergeId) : [];
-      mergeAppliancePartRefs.forEach(ref => allPartReferences.add(ref));
-      console.log(`   - Pièces de l'appareil à supprimer (${mergeId}):`, mergeAppliancePartRefs);
-    });
-    
-    console.log("   - Toutes les références de pièces à fusionner:", Array.from(allPartReferences));
-    
-    // Mettre à jour l'appareil conservé avec les nouvelles données
-    const keepAppliance = allAppliances.find(a => a.id === keepId);
-    if (keepAppliance) {
-      updateAppliance({
-        ...keepAppliance,
-        ...mergedData
-      });
-      console.log("   - Appareil conservé mis à jour");
+      if (totalPages > 1) {
+        items.push(
+          <PaginationItem key={totalPages}>
+            <PaginationLink
+              onClick={() => goToPage(totalPages)}
+              isActive={currentPage === totalPages}
+              className="cursor-pointer"
+            >
+              {totalPages}
+            </PaginationLink>
+          </PaginationItem>
+        );
+      }
     }
 
-    // Supprimer les appareils fusionnés
-    mergeIds.forEach(id => {
-      deleteAppliance(id);
-      console.log(`   - Appareil supprimé: ${id}`);
-    });
-    
-    // Associer toutes les références de pièces collectées à l'appareil conservé
-    if (allPartReferences.size > 0 && associateApplicancesToPartReference) {
-      Array.from(allPartReferences).forEach(partRef => {
-        console.log(`   - Association de la pièce ${partRef} à l'appareil conservé ${keepId}`);
-        associateApplicancesToPartReference([keepId], partRef);
-      });
-      
-      toast(`${mergeIds.length + 1} appareils fusionnés avec ${allPartReferences.size} références de pièces consolidées`);
-    } else {
-      toast(`${mergeIds.length + 1} appareils fusionnés`);
-    }
-    
-    console.log("🔗 Fin fusion des appareils");
+    return items;
   };
 
   return (
@@ -317,15 +287,20 @@ const Appliances: React.FC = () => {
           </div>
         </div>
         
-        {/* Recherche uniquement */}
+        {/* Recherche optimisée avec debouncing */}
         <div className="mb-4">
           <Input
             type="search"
             placeholder="Référence d'appareil ou de pièce, marque, type..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            value={localSearchQuery}
+            onChange={(e) => setLocalSearchQuery(e.target.value)}
             className="max-w-md"
           />
+          {totalItems !== allAppliances.length && (
+            <p className="text-sm text-gray-500 mt-1">
+              {totalItems} résultat(s) sur {allAppliances.length} appareils
+            </p>
+          )}
         </div>
 
         {/* Filtrage par session d'import */}
@@ -341,7 +316,7 @@ const Appliances: React.FC = () => {
 
         {/* Détection de doublons */}
         <DuplicateDetection
-          appliances={filteredBySession}
+          appliances={paginatedAppliances}
           onMergeDuplicates={handleMergeDuplicates}
           onUpdateAppliance={updateAppliance}
         />
@@ -386,10 +361,38 @@ const Appliances: React.FC = () => {
             </div>
           )}
         </div>
+
+        {/* Informations de pagination */}
+        {totalPages > 1 && (
+          <div className="mb-4 flex justify-between items-center">
+            <div className="text-sm text-gray-600">
+              Page {currentPage} sur {totalPages} • {totalItems} éléments • {ITEMS_PER_PAGE} par page
+            </div>
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious 
+                    onClick={prevPage}
+                    className={`cursor-pointer ${!hasPrevPage ? 'pointer-events-none opacity-50' : ''}`}
+                  />
+                </PaginationItem>
+                
+                {renderPaginationItems()}
+                
+                <PaginationItem>
+                  <PaginationNext 
+                    onClick={nextPage}
+                    className={`cursor-pointer ${!hasNextPage ? 'pointer-events-none opacity-50' : ''}`}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          </div>
+        )}
         
-        {/* Liste des appareils */}
+        {/* Liste des appareils avec virtualisation */}
         <ApplianceList 
-          appliances={filteredBySession} 
+          appliances={paginatedAppliances} 
           onEdit={handleEdit}
           onDelete={handleDelete}
           onToggleSelection={handleToggleSelection}
@@ -402,6 +405,31 @@ const Appliances: React.FC = () => {
           associateAppliancesToPartReference={(ids, partRef) => associateApplicancesToPartReference ? associateApplicancesToPartReference(ids, partRef) : 0}
           onRemoveAssociation={handleRemoveAssociation}
         />
+
+        {/* Pagination en bas */}
+        {totalPages > 1 && (
+          <div className="mt-6">
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious 
+                    onClick={prevPage}
+                    className={`cursor-pointer ${!hasPrevPage ? 'pointer-events-none opacity-50' : ''}`}
+                  />
+                </PaginationItem>
+                
+                {renderPaginationItems()}
+                
+                <PaginationItem>
+                  <PaginationNext 
+                    onClick={nextPage}
+                    className={`cursor-pointer ${!hasNextPage ? 'pointer-events-none opacity-50' : ''}`}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          </div>
+        )}
         
         {/* Dialogue de modification */}
         <ApplianceEditDialog 

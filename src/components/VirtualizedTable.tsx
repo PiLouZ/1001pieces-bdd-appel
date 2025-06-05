@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { FixedSizeList as List } from 'react-window';
 import { Appliance } from '@/types/appliance';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -38,33 +38,50 @@ const VirtualizedTable: React.FC<VirtualizedTableProps> = ({
 
   const listRef = useRef<List>(null);
 
-  const handleDragStart = (index: number, field: 'brand' | 'type') => {
+  const handleDragStart = useCallback((index: number, field: 'brand' | 'type') => {
     setDragState({
       isDragging: true,
       startIndex: index,
       field,
       currentIndex: index
     });
-  };
+  }, []);
 
-  const handleDragOver = (index: number) => {
+  const handleDragOver = useCallback((index: number) => {
     if (dragState && dragState.isDragging) {
       setDragState(prev => prev ? { ...prev, currentIndex: index } : null);
     }
-  };
+  }, [dragState]);
 
-  const handleDragEnd = () => {
+  const handleDragEnd = useCallback(() => {
     if (dragState && dragState.isDragging && dragState.currentIndex > dragState.startIndex) {
       onDragFill(dragState.startIndex, dragState.currentIndex, dragState.field);
     }
     setDragState(null);
-  };
+  }, [dragState, onDragFill]);
 
-  const Row = ({ index, style }: { index: number; style: React.CSSProperties }) => {
+  // Memoïser les composants de ligne pour éviter les re-rendus inutiles
+  const Row = React.memo(({ index, style }: { index: number; style: React.CSSProperties }) => {
     const appliance = appliances[index];
     const isInDragRange = dragState && 
       index >= dragState.startIndex && 
       index <= dragState.currentIndex;
+
+    const handleFieldChangeLocal = useCallback((field: 'brand' | 'type', value: string) => {
+      onFieldChange(appliance.id, field, value);
+    }, [appliance.id, onFieldChange]);
+
+    const handleFillDownLocal = useCallback((field: 'brand' | 'type') => {
+      onFillDown(index, field);
+    }, [index, onFillDown]);
+
+    const handleCopyToAllLocal = useCallback((field: 'brand' | 'type') => {
+      onCopyToAll(index, field);
+    }, [index, onCopyToAll]);
+
+    const handleDragStartLocal = useCallback((field: 'brand' | 'type') => {
+      handleDragStart(index, field);
+    }, [index, handleDragStart]);
 
     return (
       <div 
@@ -91,7 +108,7 @@ const VirtualizedTable: React.FC<VirtualizedTableProps> = ({
         <div className="relative">
           <Select 
             value={appliance.brand || ""} 
-            onValueChange={(value) => onFieldChange(appliance.id, 'brand', value)}
+            onValueChange={(value) => handleFieldChangeLocal('brand', value)}
           >
             <SelectTrigger 
               className={`h-8 ${!appliance.brand ? 'border-red-300 bg-red-50' : ''}`}
@@ -108,7 +125,7 @@ const VirtualizedTable: React.FC<VirtualizedTableProps> = ({
             <div
               className="absolute -bottom-1 -right-1 w-3 h-3 bg-blue-500 cursor-se-resize hover:bg-blue-600"
               draggable
-              onDragStart={() => handleDragStart(index, 'brand')}
+              onDragStart={() => handleDragStartLocal('brand')}
               onDragEnd={handleDragEnd}
               title="Glisser pour remplir vers le bas"
             >
@@ -122,7 +139,7 @@ const VirtualizedTable: React.FC<VirtualizedTableProps> = ({
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => onFillDown(index, 'brand')}
+            onClick={() => handleFillDownLocal('brand')}
             disabled={!appliance.brand}
             title="Copier vers le bas"
             className="h-7 w-7 p-0"
@@ -132,7 +149,7 @@ const VirtualizedTable: React.FC<VirtualizedTableProps> = ({
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => onCopyToAll(index, 'brand')}
+            onClick={() => handleCopyToAllLocal('brand')}
             disabled={!appliance.brand}
             title="Copier vers toutes les cellules vides"
             className="h-7 w-7 p-0"
@@ -145,7 +162,7 @@ const VirtualizedTable: React.FC<VirtualizedTableProps> = ({
         <div className="relative">
           <Select 
             value={appliance.type || ""} 
-            onValueChange={(value) => onFieldChange(appliance.id, 'type', value)}
+            onValueChange={(value) => handleFieldChangeLocal('type', value)}
           >
             <SelectTrigger 
               className={`h-8 ${!appliance.type ? 'border-red-300 bg-red-50' : ''}`}
@@ -162,7 +179,7 @@ const VirtualizedTable: React.FC<VirtualizedTableProps> = ({
             <div
               className="absolute -bottom-1 -right-1 w-3 h-3 bg-blue-500 cursor-se-resize hover:bg-blue-600"
               draggable
-              onDragStart={() => handleDragStart(index, 'type')}
+              onDragStart={() => handleDragStartLocal('type')}
               onDragEnd={handleDragEnd}
               title="Glisser pour remplir vers le bas"
             >
@@ -176,7 +193,7 @@ const VirtualizedTable: React.FC<VirtualizedTableProps> = ({
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => onFillDown(index, 'type')}
+            onClick={() => handleFillDownLocal('type')}
             disabled={!appliance.type}
             title="Copier vers le bas"
             className="h-7 w-7 p-0"
@@ -186,7 +203,7 @@ const VirtualizedTable: React.FC<VirtualizedTableProps> = ({
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => onCopyToAll(index, 'type')}
+            onClick={() => handleCopyToAllLocal('type')}
             disabled={!appliance.type}
             title="Copier vers toutes les cellules vides"
             className="h-7 w-7 p-0"
@@ -196,7 +213,9 @@ const VirtualizedTable: React.FC<VirtualizedTableProps> = ({
         </div>
       </div>
     );
-  };
+  });
+
+  Row.displayName = 'VirtualizedTableRow';
 
   return (
     <div className="border rounded">
@@ -218,6 +237,7 @@ const VirtualizedTable: React.FC<VirtualizedTableProps> = ({
         itemCount={appliances.length}
         itemSize={ROW_HEIGHT}
         itemData={appliances}
+        overscanCount={5}
       >
         {Row}
       </List>
