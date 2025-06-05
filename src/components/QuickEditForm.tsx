@@ -1,13 +1,25 @@
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { Appliance } from "@/types/appliance";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Check, RotateCcw, ArrowDown, Copy, Plus } from "lucide-react";
+import { Check, RotateCcw, Plus, ChevronUp, ChevronDown, Search } from "lucide-react";
 import { toast } from "sonner";
 import { Label } from "@/components/ui/label";
+import VirtualizedTable from "./VirtualizedTable";
+import { usePagination } from "@/hooks/usePagination";
+import { useTableSort } from "@/hooks/useTableSort";
+import { useDebounce } from "@/hooks/useDebounce";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+  PaginationEllipsis,
+} from "@/components/ui/pagination";
 
 interface QuickEditFormProps {
   appliances: Appliance[];
@@ -15,6 +27,9 @@ interface QuickEditFormProps {
   knownBrands: string[];
   knownTypes: string[];
 }
+
+const ITEMS_PER_PAGE = 50;
+const VIRTUAL_HEIGHT = 400;
 
 const QuickEditForm: React.FC<QuickEditFormProps> = ({
   appliances,
@@ -27,10 +42,50 @@ const QuickEditForm: React.FC<QuickEditFormProps> = ({
   const [knownTypes, setKnownTypes] = useState<string[]>(initialKnownTypes);
   const [newBrand, setNewBrand] = useState("");
   const [newType, setNewType] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // Debounce la recherche pour améliorer les performances
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
+
+  // Filtrage des données basé sur la recherche
+  const filteredAppliances = useMemo(() => {
+    if (!debouncedSearchQuery.trim()) {
+      return editedAppliances;
+    }
+
+    const query = debouncedSearchQuery.toLowerCase();
+    return editedAppliances.filter(appliance => 
+      appliance.reference.toLowerCase().includes(query) ||
+      (appliance.commercialRef && appliance.commercialRef.toLowerCase().includes(query)) ||
+      (appliance.brand && appliance.brand.toLowerCase().includes(query)) ||
+      (appliance.type && appliance.type.toLowerCase().includes(query))
+    );
+  }, [editedAppliances, debouncedSearchQuery]);
+
+  // Tri des données
+  const { sortedData, handleSort, getSortIcon } = useTableSort(filteredAppliances);
+
+  // Pagination
+  const {
+    currentData,
+    currentPage,
+    totalPages,
+    totalItems,
+    goToPage,
+    nextPage,
+    prevPage,
+    hasNextPage,
+    hasPrevPage,
+    reset: resetPagination
+  } = usePagination({
+    data: sortedData,
+    itemsPerPage: ITEMS_PER_PAGE
+  });
 
   useEffect(() => {
     setEditedAppliances(appliances);
-  }, [appliances]);
+    resetPagination();
+  }, [appliances, resetPagination]);
 
   useEffect(() => {
     setKnownBrands(initialKnownBrands);
@@ -39,6 +94,10 @@ const QuickEditForm: React.FC<QuickEditFormProps> = ({
   useEffect(() => {
     setKnownTypes(initialKnownTypes);
   }, [initialKnownTypes]);
+
+  useEffect(() => {
+    resetPagination();
+  }, [debouncedSearchQuery, resetPagination]);
 
   const handleFieldChange = (id: string, field: 'brand' | 'type', value: string) => {
     const updated = editedAppliances.map(app => 
@@ -64,14 +123,18 @@ const QuickEditForm: React.FC<QuickEditFormProps> = ({
   };
 
   const fillDown = (fromIndex: number, field: 'brand' | 'type') => {
-    const sourceValue = editedAppliances[fromIndex][field];
+    const sourceAppliance = currentData[fromIndex];
+    const sourceValue = sourceAppliance[field];
     if (!sourceValue) {
       toast("Aucune valeur à copier");
       return;
     }
 
     const updated = editedAppliances.map((app, index) => {
-      if (index > fromIndex && (!app[field] || app[field].trim() === '')) {
+      const applianceIndex = editedAppliances.findIndex(a => a.id === app.id);
+      const sourceApplianceIndex = editedAppliances.findIndex(a => a.id === sourceAppliance.id);
+      
+      if (applianceIndex > sourceApplianceIndex && (!app[field] || app[field].trim() === '')) {
         return { ...app, [field]: sourceValue };
       }
       return app;
@@ -79,22 +142,20 @@ const QuickEditForm: React.FC<QuickEditFormProps> = ({
 
     setEditedAppliances(updated);
     
-    const affectedCount = updated.slice(fromIndex + 1).filter((app, index) => 
-      !appliances[index + fromIndex + 1]?.[field] || appliances[index + fromIndex + 1]?.[field]?.trim() === ''
-    ).length;
-    
+    const affectedCount = updated.filter(app => app[field] === sourceValue).length - 1;
     toast(`${affectedCount} cellules remplies vers le bas avec "${sourceValue}"`);
   };
 
   const copyToAll = (fromIndex: number, field: 'brand' | 'type') => {
-    const sourceValue = editedAppliances[fromIndex][field];
+    const sourceAppliance = currentData[fromIndex];
+    const sourceValue = sourceAppliance[field];
     if (!sourceValue) {
       toast("Aucune valeur à copier");
       return;
     }
 
-    const updated = editedAppliances.map((app, index) => {
-      if (index !== fromIndex && (!app[field] || app[field].trim() === '')) {
+    const updated = editedAppliances.map((app) => {
+      if (app.id !== sourceAppliance.id && (!app[field] || app[field].trim() === '')) {
         return { ...app, [field]: sourceValue };
       }
       return app;
@@ -102,17 +163,37 @@ const QuickEditForm: React.FC<QuickEditFormProps> = ({
 
     setEditedAppliances(updated);
     
-    const affectedCount = updated.filter((app, index) => 
-      index !== fromIndex && app[field] === sourceValue
-    ).length;
-    
+    const affectedCount = updated.filter(app => app[field] === sourceValue).length - 1;
     toast(`${affectedCount} cellules mises à jour avec "${sourceValue}"`);
+  };
+
+  const handleDragFill = (fromIndex: number, toIndex: number, field: 'brand' | 'type') => {
+    const sourceAppliance = currentData[fromIndex];
+    const sourceValue = sourceAppliance[field];
+    if (!sourceValue) {
+      toast("Aucune valeur à copier");
+      return;
+    }
+
+    const appliancesToUpdate = currentData.slice(fromIndex + 1, toIndex + 1);
+    
+    const updated = editedAppliances.map(app => {
+      if (appliancesToUpdate.some(updateApp => updateApp.id === app.id)) {
+        return { ...app, [field]: sourceValue };
+      }
+      return app;
+    });
+
+    setEditedAppliances(updated);
+    toast(`${appliancesToUpdate.length} cellules remplies par glisser-déposer avec "${sourceValue}"`);
   };
 
   const resetChanges = () => {
     setEditedAppliances(appliances);
     setKnownBrands(initialKnownBrands);
     setKnownTypes(initialKnownTypes);
+    setSearchQuery("");
+    resetPagination();
     toast("Modifications annulées");
   };
 
@@ -122,6 +203,87 @@ const QuickEditForm: React.FC<QuickEditFormProps> = ({
   };
 
   const hasChanges = JSON.stringify(editedAppliances) !== JSON.stringify(appliances);
+
+  // Génération des liens de pagination
+  const renderPaginationItems = () => {
+    const items = [];
+    const maxVisible = 5;
+    
+    if (totalPages <= maxVisible) {
+      for (let i = 1; i <= totalPages; i++) {
+        items.push(
+          <PaginationItem key={i}>
+            <PaginationLink
+              onClick={() => goToPage(i)}
+              isActive={currentPage === i}
+              className="cursor-pointer"
+            >
+              {i}
+            </PaginationLink>
+          </PaginationItem>
+        );
+      }
+    } else {
+      // Logique pour pagination avec ellipses
+      items.push(
+        <PaginationItem key={1}>
+          <PaginationLink
+            onClick={() => goToPage(1)}
+            isActive={currentPage === 1}
+            className="cursor-pointer"
+          >
+            1
+          </PaginationLink>
+        </PaginationItem>
+      );
+
+      if (currentPage > 3) {
+        items.push(
+          <PaginationItem key="ellipsis1">
+            <PaginationEllipsis />
+          </PaginationItem>
+        );
+      }
+
+      for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) {
+        items.push(
+          <PaginationItem key={i}>
+            <PaginationLink
+              onClick={() => goToPage(i)}
+              isActive={currentPage === i}
+              className="cursor-pointer"
+            >
+              {i}
+            </PaginationLink>
+          </PaginationItem>
+        );
+      }
+
+      if (currentPage < totalPages - 2) {
+        items.push(
+          <PaginationItem key="ellipsis2">
+            <PaginationEllipsis />
+          </PaginationItem>
+        );
+      }
+
+      if (totalPages > 1) {
+        items.push(
+          <PaginationItem key={totalPages}>
+            <PaginationLink
+              onClick={() => goToPage(totalPages)}
+              isActive={currentPage === totalPages}
+              className="cursor-pointer"
+            >
+              {totalPages}
+            </PaginationLink>
+          </PaginationItem>
+        );
+      }
+    }
+
+    return items;
+  };
 
   return (
     <Card className="mb-6">
@@ -194,126 +356,94 @@ const QuickEditForm: React.FC<QuickEditFormProps> = ({
           </div>
         </div>
 
-        <div className="space-y-2">
-          <div className="text-sm text-gray-600 mb-4">
-            💡 <strong>Astuce :</strong> Utilisez les boutons à droite pour copier une valeur vers les cellules vides suivantes ou vers toutes les cellules vides.
+        {/* Barre de recherche */}
+        <div className="mb-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Input
+              placeholder="Rechercher par référence technique, commerciale, marque ou type..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
+            />
           </div>
-
-          {/* En-tête du tableau */}
-          <div className="grid grid-cols-6 gap-2 p-3 bg-gray-100 rounded font-medium text-sm">
-            <div>Référence technique</div>
-            <div>Référence commerciale</div>
-            <div>Marque</div>
-            <div className="text-center">Actions</div>
-            <div>Type</div>
-            <div className="text-center">Actions</div>
-          </div>
-
-          {/* Lignes de données */}
-          {editedAppliances.map((appliance, index) => (
-            <div key={appliance.id} className="grid grid-cols-6 gap-2 p-2 border rounded hover:bg-gray-50">
-              {/* Référence technique (lecture seule) */}
-              <div className="p-2 bg-gray-50 rounded text-sm">
-                {appliance.reference}
-              </div>
-
-              {/* Référence commerciale (lecture seule) */}
-              <div className="p-2 bg-gray-50 rounded text-sm">
-                {appliance.commercialRef || "—"}
-              </div>
-
-              {/* Marque */}
-              <div>
-                <Select 
-                  value={appliance.brand || ""} 
-                  onValueChange={(value) => handleFieldChange(appliance.id, 'brand', value)}
-                >
-                  <SelectTrigger 
-                    className={`h-8 ${!appliance.brand ? 'border-red-300 bg-red-50' : ''}`}
-                  >
-                    <SelectValue placeholder="Sélectionner..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {knownBrands.map(brand => (
-                      <SelectItem key={brand} value={brand}>{brand}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Actions pour la marque */}
-              <div className="flex gap-1 justify-center">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => fillDown(index, 'brand')}
-                  disabled={!appliance.brand}
-                  title="Copier vers le bas"
-                  className="h-7 w-7 p-0"
-                >
-                  <ArrowDown className="h-3 w-3" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => copyToAll(index, 'brand')}
-                  disabled={!appliance.brand}
-                  title="Copier vers toutes les cellules vides"
-                  className="h-7 w-7 p-0"
-                >
-                  <Copy className="h-3 w-3" />
-                </Button>
-              </div>
-
-              {/* Type */}
-              <div>
-                <Select 
-                  value={appliance.type || ""} 
-                  onValueChange={(value) => handleFieldChange(appliance.id, 'type', value)}
-                >
-                  <SelectTrigger 
-                    className={`h-8 ${!appliance.type ? 'border-red-300 bg-red-50' : ''}`}
-                  >
-                    <SelectValue placeholder="Sélectionner..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {knownTypes.map(type => (
-                      <SelectItem key={type} value={type}>{type}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Actions pour le type */}
-              <div className="flex gap-1 justify-center">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => fillDown(index, 'type')}
-                  disabled={!appliance.type}
-                  title="Copier vers le bas"
-                  className="h-7 w-7 p-0"
-                >
-                  <ArrowDown className="h-3 w-3" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => copyToAll(index, 'type')}
-                  disabled={!appliance.type}
-                  title="Copier vers toutes les cellules vides"
-                  className="h-7 w-7 p-0"
-                >
-                  <Copy className="h-3 w-3" />
-                </Button>
-              </div>
-            </div>
-          ))}
         </div>
 
-        {editedAppliances.length === 0 && (
+        {/* Informations et tri */}
+        <div className="flex justify-between items-center mb-4">
+          <div className="text-sm text-gray-600">
+            {totalItems} élément(s) • Page {currentPage} sur {totalPages}
+            {debouncedSearchQuery && ` • Recherche: "${debouncedSearchQuery}"`}
+          </div>
+          
+          <div className="flex gap-2 text-sm">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => handleSort('reference')}
+              className="flex items-center gap-1"
+            >
+              Référence technique
+              {getSortIcon('reference') === 'asc' && <ChevronUp className="h-3 w-3" />}
+              {getSortIcon('reference') === 'desc' && <ChevronDown className="h-3 w-3" />}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => handleSort('commercialRef')}
+              className="flex items-center gap-1"
+            >
+              Référence commerciale
+              {getSortIcon('commercialRef') === 'asc' && <ChevronUp className="h-3 w-3" />}
+              {getSortIcon('commercialRef') === 'desc' && <ChevronDown className="h-3 w-3" />}
+            </Button>
+          </div>
+        </div>
+
+        <div className="text-sm text-gray-600 mb-4">
+          💡 <strong>Astuce :</strong> Utilisez les poignées bleues en coin de cellule pour glisser-déposer, ou les boutons pour copier rapidement.
+        </div>
+
+        {/* Tableau virtualisé */}
+        {currentData.length > 0 ? (
+          <VirtualizedTable
+            appliances={currentData}
+            onFieldChange={handleFieldChange}
+            knownBrands={knownBrands}
+            knownTypes={knownTypes}
+            onFillDown={fillDown}
+            onCopyToAll={copyToAll}
+            onDragFill={handleDragFill}
+            height={VIRTUAL_HEIGHT}
+          />
+        ) : (
           <div className="text-center py-8 text-gray-500">
-            Aucun appareil à éditer
+            {debouncedSearchQuery ? 'Aucun résultat trouvé' : 'Aucun appareil à éditer'}
+          </div>
+        )}
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="mt-4">
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious 
+                    onClick={prevPage}
+                    className={`cursor-pointer ${!hasPrevPage ? 'pointer-events-none opacity-50' : ''}`}
+                  />
+                </PaginationItem>
+                
+                {renderPaginationItems()}
+                
+                <PaginationItem>
+                  <PaginationNext 
+                    onClick={nextPage}
+                    className={`cursor-pointer ${!hasNextPage ? 'pointer-events-none opacity-50' : ''}`}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
           </div>
         )}
       </CardContent>
