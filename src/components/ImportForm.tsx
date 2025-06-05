@@ -401,7 +401,10 @@ const ImportForm: React.FC<ImportFormProps> = ({
                       <li>Référence commerciale de l'appareil</li>
                     </ul>
                   </ul>
-                  <p className="text-xs text-gray-500 mt-2">
+                  <p className="text-xs text-blue-600 mt-2 font-medium">
+                    <strong>Séparateurs supportés :</strong> Tabulation ou point-virgule (;)
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
                     Note: Dans le format à 2 colonnes, l'outil complètera automatiquement les marques et types s'il les connaît déjà.
                   </p>
                 </div>
@@ -441,6 +444,9 @@ const ImportForm: React.FC<ImportFormProps> = ({
                     <p className="font-medium">Formats acceptés :</p>
                     <p className="text-sm text-gray-600">
                       Mêmes formats que l'onglet Copier/Coller, mais dans un fichier.
+                    </p>
+                    <p className="text-xs text-blue-600 mt-2 font-medium">
+                      <strong>Séparateurs supportés :</strong> Tabulation ou point-virgule (;)
                     </p>
                   </div>
                 </div>

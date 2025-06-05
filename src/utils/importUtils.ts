@@ -8,6 +8,24 @@ export interface ProcessedRow {
   type?: string;
 }
 
+// Fonction utilitaire pour détecter et parser les séparateurs
+const detectAndParseLine = (line: string): string[] => {
+  // Essayer d'abord avec les tabulations
+  const tabParts = line.split('\t').map(part => part.trim()).filter(Boolean);
+  if (tabParts.length > 1) {
+    return tabParts;
+  }
+  
+  // Essayer ensuite avec les points-virgules
+  const semicolonParts = line.split(';').map(part => part.trim()).filter(Boolean);
+  if (semicolonParts.length > 1) {
+    return semicolonParts;
+  }
+  
+  // Si aucun séparateur trouvé, retourner la ligne entière
+  return [line.trim()];
+};
+
 export const parseClipboardData = (
   clipboardText: string,
   getApplianceByReference?: (ref: string) => Appliance | undefined,
@@ -33,10 +51,11 @@ export const parseClipboardData = (
 
     // Détecter le format en analysant la première ligne
     const firstLine = lines[0];
-    const tabs = firstLine.split('\t').filter(cell => cell.trim());
-    const columns = tabs.length;
+    const parsedFirstLine = detectAndParseLine(firstLine);
+    const columns = parsedFirstLine.length;
 
     console.log(`Format détecté: ${columns} colonnes`);
+    console.log(`Séparateur détecté: ${firstLine.includes('\t') ? 'tabulation' : firstLine.includes(';') ? 'point-virgule' : 'aucun'}`);
 
     if (columns === 2) {
       // Format à 2 colonnes : Référence technique, Référence commerciale
@@ -76,7 +95,7 @@ const parseTwoColumnFormat = (
   const needsUserInput: Appliance[] = [];
   
   lines.forEach((line, index) => {
-    const parts = line.split('\t').map(part => part.trim()).filter(Boolean);
+    const parts = detectAndParseLine(line);
     
     if (parts.length >= 2) {
       const reference = parts[0];
@@ -175,7 +194,7 @@ const parseFourColumnFormat = (lines: string[]) => {
   const errors: string[] = [];
   
   lines.forEach((line, index) => {
-    const parts = line.split('\t').map(part => part.trim()).filter(Boolean);
+    const parts = detectAndParseLine(line);
     
     if (parts.length >= 4) {
       const type = parts[0];
