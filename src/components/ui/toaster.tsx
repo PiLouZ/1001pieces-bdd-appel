@@ -1,3 +1,5 @@
+
+import React from "react"
 import { useToast } from "@/hooks/use-toast"
 import {
   Toast,
@@ -9,7 +11,15 @@ import {
 } from "@/components/ui/toast"
 
 export function Toaster() {
-  const { toasts } = useToast()
+  let toasts: any[] = [];
+  
+  try {
+    const toastHook = useToast();
+    toasts = toastHook.toasts || [];
+  } catch (error) {
+    console.error("Error in useToast hook:", error);
+    toasts = [];
+  }
 
   return (
     <ToastProvider>
