@@ -127,13 +127,21 @@ const QuickEditForm: React.FC<QuickEditFormProps> = ({
 
   const handleAutoFill = (index: number, field: 'brand' | 'type') => {
     autoFill(index, field);
-    toast.success(`Valeur copiée automatiquement vers toutes les cellules vides`);
+    toast.success(`Valeur copiée automatiquement vers toutes les cellules restantes`);
   };
 
   const handleDragFill = (fromIndex: number, toIndex: number, field: 'brand' | 'type') => {
     dragFill(fromIndex, toIndex, field);
     const count = toIndex - fromIndex;
     toast.success(`Valeur copiée sur ${count} cellules`);
+  };
+
+  const handleBrandDragFill = (index: number, toIndex: number) => {
+    handleDragFill(index, toIndex, 'brand');
+  };
+
+  const handleTypeDragFill = (index: number, toIndex: number) => {
+    handleDragFill(index, toIndex, 'type');
   };
 
   const handleSubmit = () => {
@@ -252,6 +260,8 @@ const QuickEditForm: React.FC<QuickEditFormProps> = ({
                       showFillHandle={true}
                       onFillDown={() => handleFillDown(index, 'brand')}
                       onDoubleClickFill={() => handleAutoFill(index, 'brand')}
+                      onDragFill={(toIndex) => handleBrandDragFill(index, toIndex)}
+                      index={index}
                     />
                   </TableCell>
                   <TableCell>
@@ -267,6 +277,8 @@ const QuickEditForm: React.FC<QuickEditFormProps> = ({
                       showFillHandle={true}
                       onFillDown={() => handleFillDown(index, 'type')}
                       onDoubleClickFill={() => handleAutoFill(index, 'type')}
+                      onDragFill={(toIndex) => handleTypeDragFill(index, toIndex)}
+                      index={index}
                     />
                   </TableCell>
                 </TableRow>

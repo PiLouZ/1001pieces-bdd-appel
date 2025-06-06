@@ -13,7 +13,7 @@ export const useExcelFill = ({ appliances, onUpdateAppliances }: UseExcelFillPro
     field: 'brand' | 'type';
   } | null>(null);
 
-  // Fonction pour remplir vers le bas à partir d'un index donné
+  // Fonction pour remplir vers le bas à partir d'un index donné (écrase les valeurs existantes)
   const fillDown = useCallback((fromIndex: number, field: 'brand' | 'type') => {
     const sourceValue = appliances[fromIndex]?.[field];
     if (!sourceValue) return;
@@ -33,31 +33,29 @@ export const useExcelFill = ({ appliances, onUpdateAppliances }: UseExcelFillPro
     onUpdateAppliances(updatedAppliances);
   }, [appliances, onUpdateAppliances]);
 
-  // Fonction pour remplir automatiquement (détection de pattern ou remplir jusqu'à la fin)
+  // Fonction pour remplir automatiquement (double-clic - écrase TOUTES les valeurs)
   const autoFill = useCallback((fromIndex: number, field: 'brand' | 'type') => {
     const sourceValue = appliances[fromIndex]?.[field];
     if (!sourceValue) return;
 
     const updatedAppliances = [...appliances];
     
-    // Pour l'auto-fill, on remplit toutes les cellules vides restantes
+    // Pour l'auto-fill, on remplit TOUTES les cellules restantes (écrase les existantes)
     for (let i = fromIndex + 1; i < updatedAppliances.length; i++) {
-      if (!updatedAppliances[i][field]) {
-        updatedAppliances[i] = { ...updatedAppliances[i], [field]: sourceValue };
-      }
+      updatedAppliances[i] = { ...updatedAppliances[i], [field]: sourceValue };
     }
 
     onUpdateAppliances(updatedAppliances);
   }, [appliances, onUpdateAppliances]);
 
-  // Fonction pour remplir par glisser-déposer
+  // Fonction pour remplir par glisser-déposer (écrase TOUTES les valeurs dans la plage)
   const dragFill = useCallback((fromIndex: number, toIndex: number, field: 'brand' | 'type') => {
     const sourceValue = appliances[fromIndex]?.[field];
     if (!sourceValue || toIndex <= fromIndex) return;
 
     const updatedAppliances = [...appliances];
     
-    // Remplir de fromIndex + 1 à toIndex
+    // Remplir de fromIndex + 1 à toIndex (écrase toutes les valeurs)
     for (let i = fromIndex + 1; i <= toIndex; i++) {
       updatedAppliances[i] = { ...updatedAppliances[i], [field]: sourceValue };
     }

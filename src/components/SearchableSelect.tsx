@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useRef } from "react";
 import { Check, ChevronsUpDown, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -28,6 +29,8 @@ interface SearchableSelectProps {
   onFillDown?: () => void;
   onDoubleClickFill?: () => void;
   showFillHandle?: boolean;
+  onDragFill?: (toIndex: number) => void;
+  index?: number;
 }
 
 const SearchableSelect: React.FC<SearchableSelectProps> = ({
@@ -41,11 +44,14 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
   allowCustomValue = false,
   onFillDown,
   onDoubleClickFill,
-  showFillHandle = false
+  showFillHandle = false,
+  onDragFill,
+  index = 0
 }) => {
   const [open, setOpen] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const [isDragging, setIsDragging] = useState(false);
+  const [dragStartY, setDragStartY] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const fillHandleRef = useRef<HTMLDivElement>(null);
 
@@ -82,25 +88,51 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
   };
 
   const handleFillHandleMouseDown = (e: React.MouseEvent) => {
+    if (!value || !onDragFill) return;
+    
     e.preventDefault();
     e.stopPropagation();
+    
     setIsDragging(true);
+    setDragStartY(e.clientY);
     
     const handleMouseMove = (e: MouseEvent) => {
-      // Visual feedback during drag
-      if (containerRef.current) {
+      if (!containerRef.current) return;
+      
+      // Calculer la position relative pour déterminer l'index de destination
+      const containerRect = containerRef.current.getBoundingClientRect();
+      const rowHeight = containerRect.height;
+      const deltaY = e.clientY - dragStartY;
+      const rowsToFill = Math.floor(deltaY / rowHeight);
+      
+      if (rowsToFill > 0) {
+        // Feedback visuel pendant le drag
         containerRef.current.style.backgroundColor = '#e3f2fd';
+        containerRef.current.style.borderColor = '#2196f3';
       }
     };
 
-    const handleMouseUp = () => {
+    const handleMouseUp = (e: MouseEvent) => {
       setIsDragging(false);
+      
       if (containerRef.current) {
         containerRef.current.style.backgroundColor = '';
+        containerRef.current.style.borderColor = '';
       }
-      if (onFillDown) {
-        onFillDown();
+      
+      // Calculer l'index de destination
+      if (containerRef.current && onDragFill) {
+        const containerRect = containerRef.current.getBoundingClientRect();
+        const rowHeight = containerRect.height;
+        const deltaY = e.clientY - dragStartY;
+        const rowsToFill = Math.floor(deltaY / rowHeight);
+        
+        if (rowsToFill > 0) {
+          const targetIndex = index + rowsToFill;
+          onDragFill(targetIndex);
+        }
       }
+      
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
@@ -191,7 +223,7 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
       {value && showFillHandle && (
         <div
           ref={fillHandleRef}
-          className="absolute -bottom-1 -right-1 w-3 h-3 bg-blue-600 cursor-se-resize hover:bg-blue-700 border border-white shadow-sm"
+          className="absolute -bottom-1 -right-1 w-3 h-3 bg-blue-600 cursor-se-resize hover:bg-blue-700 border border-white shadow-sm select-none"
           onMouseDown={handleFillHandleMouseDown}
           onDoubleClick={handleFillHandleDoubleClick}
           title="Glisser pour remplir vers le bas ou double-cliquer pour remplir automatiquement"
