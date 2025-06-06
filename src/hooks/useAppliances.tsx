@@ -13,11 +13,45 @@ export const useAppliances = () => {
   const [appliancePartAssociations, setAppliancePartAssociations] = useState<AppliancePartAssociation[]>([]);
   const [importSessions, setImportSessions] = useState<Record<string, ImportSession>>({});
 
+  // Helper function to safely save to localStorage with error handling
+  const safeSaveToLocalStorage = (key: string, data: any): boolean => {
+    try {
+      const jsonString = JSON.stringify(data);
+      const sizeInMB = new Blob([jsonString]).size / (1024 * 1024);
+      
+      console.log(`Tentative de sauvegarde ${key}: ${sizeInMB.toFixed(2)} MB`);
+      
+      // Check if data is too large (over 4MB as safety margin)
+      if (sizeInMB > 4) {
+        console.warn(`⚠️ Données trop volumineuses pour localStorage (${sizeInMB.toFixed(2)} MB). Sauvegarde ignorée.`);
+        return false;
+      }
+      
+      localStorage.setItem(key, jsonString);
+      console.log(`✅ Sauvegarde réussie: ${key}`);
+      return true;
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'QuotaExceededError') {
+        console.error(`❌ Quota localStorage dépassé pour ${key}. Taille des données trop importante.`);
+        // Optionally show user notification here
+        return false;
+      } else {
+        console.error(`❌ Erreur lors de la sauvegarde ${key}:`, error);
+        return false;
+      }
+    }
+  };
+
   // Charger les données depuis le localStorage ou utiliser les données par défaut
   useEffect(() => {
     const savedAppliances = localStorage.getItem("appliances");
     if (savedAppliances) {
-      setAppliances(JSON.parse(savedAppliances));
+      try {
+        setAppliances(JSON.parse(savedAppliances));
+      } catch (error) {
+        console.error("Erreur lors du chargement des appareils:", error);
+        setAppliances(defaultAppliances);
+      }
     } else {
       setAppliances(defaultAppliances);
     }
@@ -25,40 +59,56 @@ export const useAppliances = () => {
     // Charger les références de pièces connues
     const savedPartRefs = localStorage.getItem("knownPartReferences");
     if (savedPartRefs) {
-      setKnownPartReferences(JSON.parse(savedPartRefs));
+      try {
+        setKnownPartReferences(JSON.parse(savedPartRefs));
+      } catch (error) {
+        console.error("Erreur lors du chargement des références de pièces:", error);
+      }
     }
     
     // Charger les associations entre appareils et références de pièces
     const savedAssociations = localStorage.getItem("appliancePartAssociations");
     if (savedAssociations) {
-      setAppliancePartAssociations(JSON.parse(savedAssociations));
+      try {
+        setAppliancePartAssociations(JSON.parse(savedAssociations));
+      } catch (error) {
+        console.error("Erreur lors du chargement des associations:", error);
+      }
     }
     
     // Charger les sessions d'import
     const savedSessions = localStorage.getItem("importSessions");
     if (savedSessions) {
-      setImportSessions(JSON.parse(savedSessions));
+      try {
+        setImportSessions(JSON.parse(savedSessions));
+      } catch (error) {
+        console.error("Erreur lors du chargement des sessions:", error);
+      }
     }
   }, []);
 
-  // Sauvegarder les données dans le localStorage quand elles changent
+  // Sauvegarder les données dans le localStorage quand elles changent avec protection
   useEffect(() => {
     if (appliances.length > 0) {
-      localStorage.setItem("appliances", JSON.stringify(appliances));
+      const saved = safeSaveToLocalStorage("appliances", appliances);
+      if (!saved) {
+        console.warn(`⚠️ Impossible de sauvegarder ${appliances.length} appareils. Données trop volumineuses.`);
+        // You could show a toast notification to the user here
+      }
     }
   }, [appliances]);
   
   // Sauvegarder les associations quand elles changent
   useEffect(() => {
     if (appliancePartAssociations.length > 0) {
-      localStorage.setItem("appliancePartAssociations", JSON.stringify(appliancePartAssociations));
+      safeSaveToLocalStorage("appliancePartAssociations", appliancePartAssociations);
     }
   }, [appliancePartAssociations]);
   
   // Sauvegarder les sessions d'import quand elles changent
   useEffect(() => {
     if (Object.keys(importSessions).length > 0) {
-      localStorage.setItem("importSessions", JSON.stringify(importSessions));
+      safeSaveToLocalStorage("importSessions", importSessions);
     }
   }, [importSessions]);
 
@@ -131,9 +181,9 @@ export const useAppliances = () => {
     return ids.length;
   };
 
-  // Importer plusieurs appareils avec une approche améliorée
+  // Importer plusieurs appareils avec une approche améliorée et protection quota
   const importAppliances = useCallback((newAppliances: Appliance[]) => {
-    console.log("=== DÉBUT IMPORT APPAREILS AMÉLIORÉ ===");
+    console.log("=== DÉBUT IMPORT APPAREILS AVEC PROTECTION QUOTA ===");
     console.log("Appareils à importer:", newAppliances.length);
     
     if (newAppliances.length === 0) {
@@ -141,12 +191,21 @@ export const useAppliances = () => {
       return 0;
     }
     
+    // Check storage capacity before importing large datasets
+    const estimatedSize = JSON.stringify(newAppliances).length;
+    const estimatedSizeMB = estimatedSize / (1024 * 1024);
+    
+    if (estimatedSizeMB > 3) {
+      console.warn(`⚠️ Import volumineux détecté: ${estimatedSizeMB.toFixed(2)} MB`);
+      console.warn("Les données pourraient ne pas être sauvegardées en localStorage");
+    }
+    
     // Vérifier les doublons par référence avec l'état actuel
     setAppliances(currentAppliances => {
       const existingRefs = new Set(currentAppliances.map(app => app.reference));
       const uniqueNewAppliances = newAppliances.filter(app => !existingRefs.has(app.reference));
       
-      console.log("Appareils existants (références):", Array.from(existingRefs));
+      console.log("Appareils existants:", currentAppliances.length);
       console.log("Nouveaux appareils uniques:", uniqueNewAppliances.length);
       
       if (uniqueNewAppliances.length > 0) {
@@ -157,11 +216,16 @@ export const useAppliances = () => {
           dateAdded: app.dateAdded || new Date().toISOString().split("T")[0]
         }));
         
-        console.log("Appareils avec IDs générés:", appliancesToAdd.map(a => ({ ref: a.reference, id: a.id })));
-        
         const updated = [...currentAppliances, ...appliancesToAdd];
         console.log("État de la base après import:", updated.length, "appareils");
-        console.log("=== FIN IMPORT APPAREILS AMÉLIORÉ ===");
+        
+        // Warn if dataset is getting very large
+        if (updated.length > 50000) {
+          console.warn(`⚠️ Base de données très volumineuse: ${updated.length} appareils`);
+          console.warn("Performances et sauvegarde pourraient être impactées");
+        }
+        
+        console.log("=== FIN IMPORT APPAREILS AVEC PROTECTION QUOTA ===");
         return updated;
       }
       
@@ -347,7 +411,6 @@ export const useAppliances = () => {
     // Utiliser une fonction qui accède à l'état le plus récent
     setAppliances(currentAppliances => {
       console.log("État actuel pour validation:", currentAppliances.length, "appareils");
-      console.log("Détail des appareils:", currentAppliances.map(a => ({ id: a.id, ref: a.reference })));
       
       // Valider que TOUS les IDs existent
       const validationResults = applianceIds.map(id => {
@@ -376,7 +439,7 @@ export const useAppliances = () => {
       setKnownPartReferences(currentRefs => {
         if (!currentRefs.includes(partReference)) {
           const updatedRefs = [...currentRefs, partReference];
-          localStorage.setItem("knownPartReferences", JSON.stringify(updatedRefs));
+          safeSaveToLocalStorage("knownPartReferences", updatedRefs);
           console.log("Nouvelle référence de pièce ajoutée:", partReference);
           return updatedRefs;
         }
