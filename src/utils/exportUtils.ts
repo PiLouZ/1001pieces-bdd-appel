@@ -113,6 +113,72 @@ export function exportAppliances(appliances: Appliance[], options: ExportOptions
 }
 
 /**
+ * Generates HTML anchor links for brands
+ */
+export function generateBrandAnchors(appliances: Appliance[]): string {
+  // Ensure appliances is always an array
+  const safeAppliances = Array.isArray(appliances) ? appliances : [];
+  
+  // Extract unique brands
+  const uniqueBrands = Array.from(new Set(
+    safeAppliances
+      .map(appliance => appliance?.brand || "")
+      .filter(brand => brand !== "")
+  )).sort();
+  
+  // Generate anchor links
+  return uniqueBrands
+    .map(brand => `<a href="#${brand}">${brand}</a>`)
+    .join(" ");
+}
+
+/**
+ * Generates HTML content grouped by brand
+ */
+export function generateBrandGroupedHTML(appliances: Appliance[]): string {
+  // Ensure appliances is always an array
+  const safeAppliances = Array.isArray(appliances) ? appliances : [];
+  
+  // Extract unique brands
+  const uniqueBrands = Array.from(new Set(
+    safeAppliances
+      .map(appliance => appliance?.brand || "")
+      .filter(brand => brand !== "")
+  )).sort();
+  
+  // Group appliances by brand
+  const appliancesByBrand: { [key: string]: Appliance[] } = {};
+  uniqueBrands.forEach(brand => { appliancesByBrand[brand] = []; });
+  
+  safeAppliances.forEach(appliance => {
+    if (!appliance || !appliance.brand) return;
+    if (appliancesByBrand[appliance.brand]) {
+      appliancesByBrand[appliance.brand].push(appliance);
+    }
+  });
+  
+  // Generate HTML for each brand
+  let html = '';
+  uniqueBrands.forEach(brand => {
+    // Brand header
+    html += `<div id="${brand}"><b><u>${brand}</u></b></div>\n`;
+    
+    // Appliances for this brand
+    appliancesByBrand[brand].forEach(appliance => {
+      const reference = appliance.reference || "";
+      const commercialRef = appliance.commercialRef || "";
+      const model = `${reference}${commercialRef ? " - " + commercialRef : ""}`;
+      html += `<div>${model}</div>\n`;
+    });
+    
+    // Add space between brands
+    html += `<div>&nbsp;</div>\n`;
+  });
+  
+  return html;
+}
+
+/**
  * Downloads CSV content as a file
  */
 export function downloadCSV(csvContent: string, fileName: string = "export") {
@@ -143,3 +209,4 @@ export function generateCSVFile(csvContent: string, fileName: string = "export")
     fileName: `${fileName}.csv`
   };
 }
+

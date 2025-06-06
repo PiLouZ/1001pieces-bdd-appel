@@ -1,10 +1,10 @@
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Navigation from "@/components/Navigation";
 import { useAppliances } from "@/hooks/useAppliances";
-import { downloadCSV, exportAppliances } from "@/utils/exportUtils";
-import { FileDown, Database, FileText } from "lucide-react";
+import { downloadCSV, exportAppliances, generateBrandAnchors, generateBrandGroupedHTML } from "@/utils/exportUtils";
+import { FileDown, Database, FileText, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Tabs, TabsList, TabsContent, TabsTrigger } from "@/components/ui/tabs";
@@ -13,6 +13,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
 
 const Export: React.FC = () => {
   const { 
@@ -32,6 +33,10 @@ const Export: React.FC = () => {
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [searchBrand, setSearchBrand] = useState("");
   const [searchType, setSearchType] = useState("");
+  const [brandAnchorsHTML, setBrandAnchorsHTML] = useState("");
+  const [brandGroupedHTML, setBrandGroupedHTML] = useState("");
+  const [copiedAnchors, setCopiedAnchors] = useState(false);
+  const [copiedGrouped, setCopiedGrouped] = useState(false);
 
   const safeAppliances = Array.isArray(allAppliances) ? allAppliances : [];
   const safePartReferences = Array.isArray(knownPartReferences) ? knownPartReferences : [];
@@ -96,6 +101,18 @@ const Export: React.FC = () => {
         : [...prev, type]
     );
   };
+
+  const copyToClipboard = async (text: string, setCopied: React.Dispatch<React.SetStateAction<boolean>>) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+      toast("Copié dans le presse-papiers");
+    } catch (err) {
+      toast("Erreur lors de la copie");
+      console.error('Failed to copy:', err);
+    }
+  };
   
   const handleExport = () => {
     try {
@@ -138,34 +155,24 @@ const Export: React.FC = () => {
         return;
       }
       
-      if (selectedFormat === "csv") {
-        const csvContent = exportAppliances(appliancesToExport, { 
-          format: "csv",
-          includeHeader: includeHeader,
-          partReference: exportType === "by-part-reference" ? selectedPartReference : undefined
-        });
-        downloadCSV(csvContent, fileName);
+      // Toujours générer le CSV et le télécharger automatiquement
+      const csvContent = exportAppliances(appliancesToExport, { 
+        format: "csv",
+        includeHeader: includeHeader,
+        partReference: exportType === "by-part-reference" ? selectedPartReference : undefined
+      });
+      downloadCSV(csvContent, fileName);
+
+      if (selectedFormat === "html") {
+        // Générer les deux formats HTML demandés
+        const brandAnchors = generateBrandAnchors(appliancesToExport);
+        const brandGrouped = generateBrandGroupedHTML(appliancesToExport);
         
-        toast(`${appliancesToExport.length} appareils ont été exportés au format CSV`);
-      } else if (selectedFormat === "html") {
-        const htmlContent = exportAppliances(appliancesToExport, { 
-          format: "html",
-          includeHeader: includeHeader,
-          partReference: exportType === "by-part-reference" ? selectedPartReference : undefined
-        });
+        setBrandAnchorsHTML(brandAnchors);
+        setBrandGroupedHTML(brandGrouped);
         
-        const blob = new Blob([htmlContent], { type: 'text/html' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = `${fileName}.html`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-        
-        toast(`${appliancesToExport.length} appareils ont été exportés au format HTML`);
-      } else {
+        toast(`${appliancesToExport.length} appareils ont été exportés en format HTML et CSV`);
+      } else if (selectedFormat === "json") {
         const jsonContent = exportAppliances(appliancesToExport, { 
           format: "json",
           partReference: exportType === "by-part-reference" ? selectedPartReference : undefined
@@ -181,7 +188,9 @@ const Export: React.FC = () => {
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
         
-        toast(`${appliancesToExport.length} appareils ont été exportés au format JSON`);
+        toast(`${appliancesToExport.length} appareils ont été exportés au format JSON et CSV`);
+      } else {
+        toast(`${appliancesToExport.length} appareils ont été exportés au format CSV`);
       }
     } catch (error) {
       toast("Une erreur est survenue lors de l'exportation");
@@ -338,7 +347,7 @@ const Export: React.FC = () => {
                       <Label htmlFor="include-header-html">Inclure en-tête des colonnes</Label>
                     </div>
                     <p className="text-sm text-gray-500">
-                      Format HTML pour l'affichage dans un navigateur.
+                      Format HTML avec deux extraits copiables : liens d'ancrage et liste groupée par marque.
                     </p>
                   </TabsContent>
                   <TabsContent value="json" className="pt-4">
@@ -356,65 +365,106 @@ const Export: React.FC = () => {
               <CardTitle>Aperçu et téléchargement</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="bg-gray-50 p-4 rounded-md border h-56 overflow-auto">
-                {exportType === "all" ? (
-                  <div className="flex flex-col items-center justify-center h-full">
-                    <Database className="h-10 w-10 text-gray-400 mb-2" />
-                    <p className="text-center text-gray-500">
-                      {safeAppliances.length === 0 ? (
-                        "Aucun appareil à exporter"
-                      ) : (
-                        `${safeAppliances.length} appareils seront exportés`
-                      )}
-                    </p>
+              {selectedFormat === "html" && brandAnchorsHTML && brandGroupedHTML ? (
+                <div className="space-y-6">
+                  <div>
+                    <Label className="mb-2 block">Liens d'ancrage</Label>
+                    <div className="flex mb-2">
+                      <Textarea 
+                        value={brandAnchorsHTML} 
+                        readOnly 
+                        className="font-mono text-xs resize-none flex-grow"
+                        rows={3}
+                      />
+                      <Button 
+                        variant="outline" 
+                        className="ml-2" 
+                        onClick={() => copyToClipboard(brandAnchorsHTML, setCopiedAnchors)}
+                      >
+                        {copiedAnchors ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                      </Button>
+                    </div>
                   </div>
-                ) : exportType === "by-part-reference" ? (
-                  <div className="flex flex-col items-center justify-center h-full">
-                    <FileText className="h-10 w-10 text-gray-400 mb-2" />
-                    <p className="text-center text-gray-500">
-                      {!selectedPartReference ? (
-                        "Sélectionnez une référence de pièce"
-                      ) : (
-                        getCompatibleAppliances(selectedPartReference).length === 0 ? (
-                          "Aucun appareil compatible avec cette référence"
+                  <div>
+                    <Label className="mb-2 block">Contenu groupé par marque</Label>
+                    <div className="flex">
+                      <Textarea 
+                        value={brandGroupedHTML} 
+                        readOnly 
+                        className="font-mono text-xs resize-none flex-grow"
+                        rows={10}
+                      />
+                      <Button 
+                        variant="outline" 
+                        className="ml-2" 
+                        onClick={() => copyToClipboard(brandGroupedHTML, setCopiedGrouped)}
+                      >
+                        {copiedGrouped ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-gray-50 p-4 rounded-md border h-56 overflow-auto">
+                  {exportType === "all" ? (
+                    <div className="flex flex-col items-center justify-center h-full">
+                      <Database className="h-10 w-10 text-gray-400 mb-2" />
+                      <p className="text-center text-gray-500">
+                        {safeAppliances.length === 0 ? (
+                          "Aucun appareil à exporter"
                         ) : (
-                          `${getCompatibleAppliances(selectedPartReference).length} appareils compatibles seront exportés`
-                        )
-                      )}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center h-full">
-                    <FileText className="h-10 w-10 text-gray-400 mb-2" />
-                    <p className="text-center text-gray-500">
-                      {selectedBrands.length === 0 && selectedTypes.length === 0 ? (
-                        "Sélectionnez au moins une marque ou un type"
-                      ) : (
-                        getAppliancesByBrandAndType().length === 0 ? (
-                          "Aucun appareil ne correspond aux critères"
+                          `${safeAppliances.length} appareils seront exportés`
+                        )}
+                      </p>
+                    </div>
+                  ) : exportType === "by-part-reference" ? (
+                    <div className="flex flex-col items-center justify-center h-full">
+                      <FileText className="h-10 w-10 text-gray-400 mb-2" />
+                      <p className="text-center text-gray-500">
+                        {!selectedPartReference ? (
+                          "Sélectionnez une référence de pièce"
                         ) : (
-                          `${getAppliancesByBrandAndType().length} appareils seront exportés`
-                        )
+                          getCompatibleAppliances(selectedPartReference).length === 0 ? (
+                            "Aucun appareil compatible avec cette référence"
+                          ) : (
+                            `${getCompatibleAppliances(selectedPartReference).length} appareils compatibles seront exportés`
+                          )
+                        )}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center h-full">
+                      <FileText className="h-10 w-10 text-gray-400 mb-2" />
+                      <p className="text-center text-gray-500">
+                        {selectedBrands.length === 0 && selectedTypes.length === 0 ? (
+                          "Sélectionnez au moins une marque ou un type"
+                        ) : (
+                          getAppliancesByBrandAndType().length === 0 ? (
+                            "Aucun appareil ne correspond aux critères"
+                          ) : (
+                            `${getAppliancesByBrandAndType().length} appareils seront exportés`
+                          )
+                        )}
+                      </p>
+                      {(selectedBrands.length > 0 || selectedTypes.length > 0) && (
+                        <div className="mt-2 text-sm text-gray-600">
+                          {selectedBrands.length > 0 && (
+                            <p>Marques: {selectedBrands.join(', ')}</p>
+                          )}
+                          {selectedTypes.length > 0 && (
+                            <p>Types: {selectedTypes.join(', ')}</p>
+                          )}
+                        </div>
                       )}
-                    </p>
-                    {(selectedBrands.length > 0 || selectedTypes.length > 0) && (
-                      <div className="mt-2 text-sm text-gray-600">
-                        {selectedBrands.length > 0 && (
-                          <p>Marques: {selectedBrands.join(', ')}</p>
-                        )}
-                        {selectedTypes.length > 0 && (
-                          <p>Types: {selectedTypes.join(', ')}</p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
+                    </div>
+                  )}
+                </div>
+              )}
               
               <div className="flex justify-end">
                 <Button onClick={handleExport} disabled={safeAppliances.length === 0}>
                   <FileDown className="mr-2 h-4 w-4" />
-                  Télécharger
+                  {selectedFormat === "html" ? "Générer" : "Télécharger"}
                 </Button>
               </div>
             </CardContent>
@@ -430,3 +480,4 @@ const Export: React.FC = () => {
 };
 
 export default Export;
+
