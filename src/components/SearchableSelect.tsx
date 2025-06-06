@@ -31,6 +31,7 @@ interface SearchableSelectProps {
   showFillHandle?: boolean;
   onDragFill?: (toIndex: number) => void;
   index?: number;
+  totalRows?: number;
 }
 
 const SearchableSelect: React.FC<SearchableSelectProps> = ({
@@ -46,12 +47,12 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
   onDoubleClickFill,
   showFillHandle = false,
   onDragFill,
-  index = 0
+  index = 0,
+  totalRows = 0
 }) => {
   const [open, setOpen] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const [isDragging, setIsDragging] = useState(false);
-  const [dragStartY, setDragStartY] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const fillHandleRef = useRef<HTMLDivElement>(null);
 
@@ -88,27 +89,32 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
   };
 
   const handleFillHandleMouseDown = (e: React.MouseEvent) => {
-    if (!value || !onDragFill) return;
+    if (!value || !onDragFill || !containerRef.current) return;
     
     e.preventDefault();
     e.stopPropagation();
     
     setIsDragging(true);
-    setDragStartY(e.clientY);
+    
+    const startY = e.clientY;
+    const tableRow = containerRef.current.closest('tr');
+    if (!tableRow) return;
+    
+    const rowHeight = tableRow.getBoundingClientRect().height;
     
     const handleMouseMove = (e: MouseEvent) => {
       if (!containerRef.current) return;
       
-      // Calculer la position relative pour déterminer l'index de destination
-      const containerRect = containerRef.current.getBoundingClientRect();
-      const rowHeight = containerRect.height;
-      const deltaY = e.clientY - dragStartY;
+      const deltaY = e.clientY - startY;
       const rowsToFill = Math.floor(deltaY / rowHeight);
       
       if (rowsToFill > 0) {
         // Feedback visuel pendant le drag
         containerRef.current.style.backgroundColor = '#e3f2fd';
         containerRef.current.style.borderColor = '#2196f3';
+      } else {
+        containerRef.current.style.backgroundColor = '';
+        containerRef.current.style.borderColor = '';
       }
     };
 
@@ -120,16 +126,29 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
         containerRef.current.style.borderColor = '';
       }
       
-      // Calculer l'index de destination
-      if (containerRef.current && onDragFill) {
-        const containerRect = containerRef.current.getBoundingClientRect();
-        const rowHeight = containerRect.height;
-        const deltaY = e.clientY - dragStartY;
+      // Calculer l'index de destination basé sur la position de la souris
+      const tableRow = containerRef.current?.closest('tr');
+      if (tableRow && onDragFill) {
+        const deltaY = e.clientY - startY;
+        const rowHeight = tableRow.getBoundingClientRect().height;
         const rowsToFill = Math.floor(deltaY / rowHeight);
         
         if (rowsToFill > 0) {
-          const targetIndex = index + rowsToFill;
-          onDragFill(targetIndex);
+          // S'assurer que l'index de destination ne dépasse pas le nombre total de lignes
+          const targetIndex = Math.min(index + rowsToFill, totalRows - 1);
+          
+          console.log('Drag fill:', { 
+            index, 
+            rowsToFill, 
+            targetIndex, 
+            totalRows,
+            deltaY,
+            rowHeight
+          });
+          
+          if (targetIndex > index) {
+            onDragFill(targetIndex);
+          }
         }
       }
       

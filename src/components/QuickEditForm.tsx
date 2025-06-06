@@ -1,3 +1,4 @@
+
 import React, { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -42,6 +43,12 @@ const QuickEditForm: React.FC<QuickEditFormProps> = ({
   });
 
   const handleApplianceChange = (index: number, field: keyof Appliance, value: string) => {
+    // Vérifier que l'index est valide
+    if (index < 0 || index >= editedAppliances.length) {
+      console.warn(`Index invalide: ${index}, longueur du tableau: ${editedAppliances.length}`);
+      return;
+    }
+    
     const updated = [...editedAppliances];
     updated[index] = { ...updated[index], [field]: value };
     setEditedAppliances(updated);
@@ -262,6 +269,7 @@ const QuickEditForm: React.FC<QuickEditFormProps> = ({
                       onDoubleClickFill={() => handleAutoFill(index, 'brand')}
                       onDragFill={(toIndex) => handleBrandDragFill(index, toIndex)}
                       index={index}
+                      totalRows={editedAppliances.length}
                     />
                   </TableCell>
                   <TableCell>
@@ -279,6 +287,7 @@ const QuickEditForm: React.FC<QuickEditFormProps> = ({
                       onDoubleClickFill={() => handleAutoFill(index, 'type')}
                       onDragFill={(toIndex) => handleTypeDragFill(index, toIndex)}
                       index={index}
+                      totalRows={editedAppliances.length}
                     />
                   </TableCell>
                 </TableRow>
