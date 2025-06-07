@@ -1,47 +1,40 @@
-
 import React from "react";
 import { Card } from "@/components/ui/card";
 import Navigation from "@/components/Navigation";
 import { Import as ImportIcon } from "lucide-react";
 import ImportForm from "@/components/ImportForm";
 import { useAppliances } from "@/hooks/useAppliances";
-import { useImportWithAssociation } from "@/hooks/useImportWithAssociation";
+import { useImportLogic } from "@/hooks/useImportLogic";
 import { useAssociationHandler } from "@/components/AssociationHandler";
 import { Appliance } from "@/types/appliance";
 
 const Import: React.FC = () => {
   const { 
+    importAppliances, 
     knownBrands = [], 
     knownTypes = [], 
     knownPartReferences = [],
     allAppliances = [],
+    associateApplicancesToPartReference,
     suggestBrand,
     suggestType
   } = useAppliances();
-
-  const { importAppliancesWithAssociation } = useImportWithAssociation();
 
   const safeKnownBrands = Array.isArray(knownBrands) ? knownBrands : [];
   const safeKnownTypes = Array.isArray(knownTypes) ? knownTypes : [];
   const safeKnownPartReferences = Array.isArray(knownPartReferences) ? knownPartReferences : [];
   const safeAllAppliances = Array.isArray(allAppliances) ? allAppliances : [];
 
-  const handleImport = (appliances: Appliance[], partReference?: string): Appliance[] => {
-    // Call the async function but don't await it - let it run in the background
-    importAppliancesWithAssociation(appliances, partReference).catch(error => {
-      console.error("Error during import with association:", error);
-    });
-    
-    // Return the appliances immediately for compatibility with ImportForm
-    return appliances;
-  };
+  const { handleImport, getApplianceByCommercialRef } = useImportLogic({
+    importAppliances,
+    associateApplicancesToPartReference,
+    allAppliances: safeAllAppliances
+  });
+
+  const { safeAssociateAppliancesToPartReference } = useAssociationHandler(associateApplicancesToPartReference);
 
   const getApplianceByReference = (ref: string) => {
     return safeAllAppliances.find(a => a.reference === ref);
-  };
-
-  const getApplianceByCommercialRef = (ref: string) => {
-    return safeAllAppliances.find(a => a.commercialRef === ref);
   };
 
   const safeSuggestBrand = (reference: string): string | null => {
@@ -52,12 +45,6 @@ const Import: React.FC = () => {
   const safeSuggestType = (reference: string, brand: string): string | null => {
     if (!reference || !brand || typeof suggestType !== 'function') return null;
     return suggestType(reference, brand);
-  };
-
-  // Dummy association function for compatibility
-  const safeAssociateAppliancesToPartReference = (applianceIds: string[], partRef: string): number => {
-    // This is handled by importAppliancesWithAssociation now
-    return applianceIds.length;
   };
 
   return (
