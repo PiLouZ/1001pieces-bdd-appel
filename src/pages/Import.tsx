@@ -26,11 +26,14 @@ const Import: React.FC = () => {
   const safeKnownPartReferences = Array.isArray(knownPartReferences) ? knownPartReferences : [];
   const safeAllAppliances = Array.isArray(allAppliances) ? allAppliances : [];
 
-  const handleImport = async (appliances: Appliance[], partReference?: string): Promise<Appliance[]> => {
-    const result = await importAppliancesWithAssociation(appliances, partReference);
+  const handleImport = (appliances: Appliance[], partReference?: string): Appliance[] => {
+    // Call the async function but don't await it - let it run in the background
+    importAppliancesWithAssociation(appliances, partReference).catch(error => {
+      console.error("Error during import with association:", error);
+    });
     
-    // Return the imported appliances for compatibility with ImportForm
-    return appliances.slice(0, result.importedCount);
+    // Return the appliances immediately for compatibility with ImportForm
+    return appliances;
   };
 
   const getApplianceByReference = (ref: string) => {
