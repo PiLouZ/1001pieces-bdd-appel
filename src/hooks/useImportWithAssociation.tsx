@@ -20,7 +20,7 @@ export const useImportWithAssociation = () => {
     associatedCount: number;
     existingIds: string[];
   }> => {
-    console.log("=== DÉBUT IMPORT ET ASSOCIATION COORDONNÉS ===");
+    console.log("=== DÉBUT IMPORT ET ASSOCIATION COORDONNÉS OPTIMISÉ ===");
     console.log("📋 Paramètres reçus:");
     console.log("   - Appareils à importer:", appliancesToImport.length);
     console.log("   - Références d'appareils:", appliancesToImport.map(a => a.reference));
@@ -34,7 +34,6 @@ export const useImportWithAssociation = () => {
 
     console.log("🗄️ État de la base de données AVANT import:");
     console.log("   - Nombre total d'appareils:", allAppliances.length);
-    console.log("   - Références présentes:", allAppliances.map(a => a.reference));
 
     // Classification des appareils : nouveaux vs existants
     const existingRefs = new Set(allAppliances.map(app => app.reference));
@@ -62,6 +61,10 @@ export const useImportWithAssociation = () => {
         
         console.log("   - Appareils importés avec succès:", importedCount);
         console.log("   - IDs des nouveaux appareils:", newApplianceIds);
+        
+        // Attendre que l'état soit mis à jour (délai plus long pour être sûr)
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
       } catch (error) {
         console.error("❌ Erreur lors de l'import:", error);
         toast.error("Erreur lors de l'import des appareils");
@@ -83,14 +86,15 @@ export const useImportWithAssociation = () => {
       console.log("   - Tous les IDs à associer:", allIdsToAssociate);
 
       if (allIdsToAssociate.length > 0) {
-        // Attendre un peu pour s'assurer que l'état est mis à jour
-        await new Promise(resolve => setTimeout(resolve, 100));
-        
         try {
+          // Attendre encore un peu pour s'assurer que l'état des appareils est complètement mis à jour
+          await new Promise(resolve => setTimeout(resolve, 200));
+          
           associatedCount = associateApplicancesToPartReference(allIdsToAssociate, partReference);
           console.log("   - Appareils associés avec succès:", associatedCount);
           
           if (associatedCount > 0) {
+            const totalProcessed = importedCount + existingIds.length;
             toast.success(`${importedCount} appareils importés et ${associatedCount} associés à ${partReference}`);
           } else {
             toast.warning(`${importedCount} appareils importés mais aucune association créée`);
@@ -104,7 +108,7 @@ export const useImportWithAssociation = () => {
       toast.success(`${importedCount} appareils importés avec succès`);
     }
 
-    console.log("=== FIN IMPORT ET ASSOCIATION COORDONNÉS ===");
+    console.log("=== FIN IMPORT ET ASSOCIATION COORDONNÉS OPTIMISÉ ===");
 
     return {
       importedCount,
