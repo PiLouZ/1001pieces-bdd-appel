@@ -1,10 +1,10 @@
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 
-export type SortField = 'reference' | 'commercialRef';
-export type SortDirection = 'asc' | 'desc' | null;
+export type SortField = 'reference' | 'commercialRef' | 'brand' | 'type' | 'dateAdded';
+export type SortDirection = 'asc' | 'desc' | 'none';
 
-interface UseSortingProps<T> {
+interface UseTableSortingProps<T> {
   data: T[];
   initialData: T[];
 }
@@ -12,44 +12,58 @@ interface UseSortingProps<T> {
 export const useTableSorting = <T extends Record<string, any>>({ 
   data, 
   initialData 
-}: UseSortingProps<T>) => {
+}: UseTableSortingProps<T>) => {
   const [sortField, setSortField] = useState<SortField | null>(null);
-  const [sortDirection, setSortDirection] = useState<SortDirection>(null);
+  const [sortDirection, setSortDirection] = useState<SortDirection>('none');
 
-  const handleSort = (field: SortField, setData: (data: T[]) => void) => {
+  const handleSort = useCallback((field: SortField, setData: (data: T[]) => void) => {
     let newDirection: SortDirection;
     
-    if (sortField === field) {
-      if (sortDirection === 'asc') {
-        newDirection = 'desc';
-      } else if (sortDirection === 'desc') {
-        newDirection = null;
-      } else {
-        newDirection = 'asc';
-      }
-    } else {
+    if (sortField !== field) {
       newDirection = 'asc';
+    } else {
+      switch (sortDirection) {
+        case 'none':
+          newDirection = 'asc';
+          break;
+        case 'asc':
+          newDirection = 'desc';
+          break;
+        case 'desc':
+          newDirection = 'none';
+          break;
+        default:
+          newDirection = 'asc';
+      }
     }
 
-    setSortField(newDirection ? field : null);
+    setSortField(field);
     setSortDirection(newDirection);
 
-    if (newDirection) {
-      const sorted = [...data].sort((a, b) => {
-        const aValue = a[field] || '';
-        const bValue = b[field] || '';
-        
-        if (newDirection === 'asc') {
-          return aValue.localeCompare(bValue, 'fr', { sensitivity: 'base' });
-        } else {
-          return bValue.localeCompare(aValue, 'fr', { sensitivity: 'base' });
-        }
-      });
-      setData(sorted);
-    } else {
+    if (newDirection === 'none') {
       setData([...initialData]);
+      return;
     }
-  };
+
+    const sortedData = [...data].sort((a, b) => {
+      const aValue = a[field] || '';
+      const bValue = b[field] || '';
+      
+      if (typeof aValue === 'string' && typeof bValue === 'string') {
+        const comparison = aValue.localeCompare(bValue, 'fr', { 
+          sensitivity: 'base',
+          numeric: true 
+        });
+        return newDirection === 'asc' ? comparison : -comparison;
+      }
+      
+      if (aValue < bValue) return newDirection === 'asc' ? -1 : 1;
+      if (aValue > bValue) return newDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    setData(sortedData);
+  }, [sortField, sortDirection, data, initialData]);
 
   return {
     sortField,

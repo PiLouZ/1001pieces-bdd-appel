@@ -1,3 +1,4 @@
+
 import React from "react";
 import { Card } from "@/components/ui/card";
 import Navigation from "@/components/Navigation";
@@ -6,7 +7,6 @@ import ImportForm from "@/components/ImportForm";
 import { useAppliances } from "@/hooks/useAppliances";
 import { useImportLogic } from "@/hooks/useImportLogic";
 import { useAssociationHandler } from "@/components/AssociationHandler";
-import { Appliance } from "@/types/appliance";
 
 const Import: React.FC = () => {
   const { 
