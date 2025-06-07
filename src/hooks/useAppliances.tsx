@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { Appliance, ImportSession, AppliancePartAssociation } from "../types/appliance";
 import { defaultAppliances } from "../data/defaultAppliances";
+import { indexedDBService } from "@/services/indexedDBService";
+import { useMigration } from "./useMigration";
+import { toast } from "sonner";
 
 export const useAppliances = () => {
   const [appliances, setAppliances] = useState<Appliance[]>([]);
@@ -12,105 +15,136 @@ export const useAppliances = () => {
   const [needsUpdate, setNeedsUpdate] = useState<Appliance[]>([]);
   const [appliancePartAssociations, setAppliancePartAssociations] = useState<AppliancePartAssociation[]>([]);
   const [importSessions, setImportSessions] = useState<Record<string, ImportSession>>({});
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Helper function to safely save to localStorage with error handling
-  const safeSaveToLocalStorage = (key: string, data: any): boolean => {
+  // Utiliser le hook de migration
+  const { isReady: migrationReady } = useMigration();
+
+  // Charger les données depuis IndexedDB une fois la migration terminée
+  useEffect(() => {
+    if (migrationReady) {
+      loadDataFromIndexedDB();
+    }
+  }, [migrationReady]);
+
+  const loadDataFromIndexedDB = async () => {
     try {
-      const jsonString = JSON.stringify(data);
-      const sizeInMB = new Blob([jsonString]).size / (1024 * 1024);
-      
-      console.log(`Tentative de sauvegarde ${key}: ${sizeInMB.toFixed(2)} MB`);
-      
-      // Check if data is too large (over 4MB as safety margin)
-      if (sizeInMB > 4) {
-        console.warn(`⚠️ Données trop volumineuses pour localStorage (${sizeInMB.toFixed(2)} MB). Sauvegarde ignorée.`);
-        return false;
-      }
-      
-      localStorage.setItem(key, jsonString);
-      console.log(`✅ Sauvegarde réussie: ${key}`);
-      return true;
-    } catch (error) {
-      if (error instanceof DOMException && error.name === 'QuotaExceededError') {
-        console.error(`❌ Quota localStorage dépassé pour ${key}. Taille des données trop importante.`);
-        // Optionally show user notification here
-        return false;
+      console.log("📖 Chargement des données depuis IndexedDB...");
+      setIsLoading(true);
+
+      // Charger toutes les données en parallèle
+      const [
+        loadedAppliances,
+        loadedAssociations,
+        loadedPartRefs,
+        loadedSessions
+      ] = await Promise.all([
+        indexedDBService.loadAppliances(),
+        indexedDBService.loadAssociations(),
+        indexedDBService.loadPartReferences(),
+        indexedDBService.loadImportSessions()
+      ]);
+
+      // Si aucun appareil n'est trouvé, utiliser les données par défaut
+      if (loadedAppliances.length === 0) {
+        console.log("📦 Aucun appareil trouvé, utilisation des données par défaut");
+        setAppliances(defaultAppliances);
+        await indexedDBService.saveAppliances(defaultAppliances);
       } else {
-        console.error(`❌ Erreur lors de la sauvegarde ${key}:`, error);
-        return false;
+        setAppliances(loadedAppliances);
       }
+
+      setAppliancePartAssociations(loadedAssociations);
+      setKnownPartReferences(loadedPartRefs);
+      setImportSessions(loadedSessions);
+
+      console.log("✅ Données chargées depuis IndexedDB");
+    } catch (error) {
+      console.error("❌ Erreur lors du chargement depuis IndexedDB:", error);
+      toast.error("Erreur lors du chargement des données");
+      
+      // Fallback vers les données par défaut
+      setAppliances(defaultAppliances);
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  // Charger les données depuis le localStorage ou utiliser les données par défaut
-  useEffect(() => {
-    const savedAppliances = localStorage.getItem("appliances");
-    if (savedAppliances) {
-      try {
-        setAppliances(JSON.parse(savedAppliances));
-      } catch (error) {
-        console.error("Erreur lors du chargement des appareils:", error);
-        setAppliances(defaultAppliances);
-      }
-    } else {
-      setAppliances(defaultAppliances);
-    }
-    
-    // Charger les références de pièces connues
-    const savedPartRefs = localStorage.getItem("knownPartReferences");
-    if (savedPartRefs) {
-      try {
-        setKnownPartReferences(JSON.parse(savedPartRefs));
-      } catch (error) {
-        console.error("Erreur lors du chargement des références de pièces:", error);
-      }
-    }
-    
-    // Charger les associations entre appareils et références de pièces
-    const savedAssociations = localStorage.getItem("appliancePartAssociations");
-    if (savedAssociations) {
-      try {
-        setAppliancePartAssociations(JSON.parse(savedAssociations));
-      } catch (error) {
-        console.error("Erreur lors du chargement des associations:", error);
-      }
-    }
-    
-    // Charger les sessions d'import
-    const savedSessions = localStorage.getItem("importSessions");
-    if (savedSessions) {
-      try {
-        setImportSessions(JSON.parse(savedSessions));
-      } catch (error) {
-        console.error("Erreur lors du chargement des sessions:", error);
-      }
-    }
-  }, []);
+  // Sauvegarder les appareils dans IndexedDB (avec debouncing automatique)
+  const saveAppliancesToDB = useCallback(async (appliancesToSave: Appliance[]) => {
+    if (!migrationReady || appliancesToSave.length === 0) return;
 
-  // Sauvegarder les données dans le localStorage quand elles changent avec protection
-  useEffect(() => {
-    if (appliances.length > 0) {
-      const saved = safeSaveToLocalStorage("appliances", appliances);
-      if (!saved) {
-        console.warn(`⚠️ Impossible de sauvegarder ${appliances.length} appareils. Données trop volumineuses.`);
-        // You could show a toast notification to the user here
-      }
+    try {
+      await indexedDBService.saveAppliances(appliancesToSave);
+    } catch (error) {
+      console.error("❌ Erreur sauvegarde appareils:", error);
+      toast.error("Erreur lors de la sauvegarde des appareils");
     }
-  }, [appliances]);
-  
-  // Sauvegarder les associations quand elles changent
-  useEffect(() => {
-    if (appliancePartAssociations.length > 0) {
-      safeSaveToLocalStorage("appliancePartAssociations", appliancePartAssociations);
+  }, [migrationReady]);
+
+  // Sauvegarder les associations dans IndexedDB
+  const saveAssociationsToDB = useCallback(async (associationsToSave: AppliancePartAssociation[]) => {
+    if (!migrationReady || associationsToSave.length === 0) return;
+
+    try {
+      await indexedDBService.saveAssociations(associationsToSave);
+    } catch (error) {
+      console.error("❌ Erreur sauvegarde associations:", error);
+      toast.error("Erreur lors de la sauvegarde des associations");
     }
-  }, [appliancePartAssociations]);
-  
-  // Sauvegarder les sessions d'import quand elles changent
-  useEffect(() => {
-    if (Object.keys(importSessions).length > 0) {
-      safeSaveToLocalStorage("importSessions", importSessions);
+  }, [migrationReady]);
+
+  // Sauvegarder les sessions d'import dans IndexedDB
+  const saveSessionsToDB = useCallback(async (sessionsToSave: Record<string, ImportSession>) => {
+    if (!migrationReady || Object.keys(sessionsToSave).length === 0) return;
+
+    try {
+      await indexedDBService.saveImportSessions(sessionsToSave);
+    } catch (error) {
+      console.error("❌ Erreur sauvegarde sessions:", error);
+      toast.error("Erreur lors de la sauvegarde des sessions");
     }
-  }, [importSessions]);
+  }, [migrationReady]);
+
+  // Sauvegarder les références de pièces dans IndexedDB
+  const savePartRefsToDB = useCallback(async (partRefsToSave: string[]) => {
+    if (!migrationReady || partRefsToSave.length === 0) return;
+
+    try {
+      await indexedDBService.savePartReferences(partRefsToSave);
+    } catch (error) {
+      console.error("❌ Erreur sauvegarde références:", error);
+      toast.error("Erreur lors de la sauvegarde des références");
+    }
+  }, [migrationReady]);
+
+  // Sauvegarder automatiquement les appareils quand ils changent
+  useEffect(() => {
+    if (migrationReady && appliances.length > 0) {
+      saveAppliancesToDB(appliances);
+    }
+  }, [appliances, saveAppliancesToDB, migrationReady]);
+
+  // Sauvegarder automatiquement les associations quand elles changent
+  useEffect(() => {
+    if (migrationReady && appliancePartAssociations.length > 0) {
+      saveAssociationsToDB(appliancePartAssociations);
+    }
+  }, [appliancePartAssociations, saveAssociationsToDB, migrationReady]);
+
+  // Sauvegarder automatiquement les sessions quand elles changent
+  useEffect(() => {
+    if (migrationReady && Object.keys(importSessions).length > 0) {
+      saveSessionsToDB(importSessions);
+    }
+  }, [importSessions, saveSessionsToDB, migrationReady]);
+
+  // Sauvegarder automatiquement les références quand elles changent
+  useEffect(() => {
+    if (migrationReady && knownPartReferences.length > 0) {
+      savePartRefsToDB(knownPartReferences);
+    }
+  }, [knownPartReferences, savePartRefsToDB, migrationReady]);
 
   // Extraire les marques et types connus
   useEffect(() => {
@@ -183,21 +217,12 @@ export const useAppliances = () => {
 
   // Importer plusieurs appareils avec une approche améliorée et protection quota
   const importAppliances = useCallback((newAppliances: Appliance[]) => {
-    console.log("=== DÉBUT IMPORT APPAREILS AVEC PROTECTION QUOTA ===");
+    console.log("=== DÉBUT IMPORT APPAREILS AVEC INDEXEDDB ===");
     console.log("Appareils à importer:", newAppliances.length);
     
     if (newAppliances.length === 0) {
       console.log("=== FIN IMPORT (AUCUN APPAREIL) ===");
       return 0;
-    }
-    
-    // Check storage capacity before importing large datasets
-    const estimatedSize = JSON.stringify(newAppliances).length;
-    const estimatedSizeMB = estimatedSize / (1024 * 1024);
-    
-    if (estimatedSizeMB > 3) {
-      console.warn(`⚠️ Import volumineux détecté: ${estimatedSizeMB.toFixed(2)} MB`);
-      console.warn("Les données pourraient ne pas être sauvegardées en localStorage");
     }
     
     // Vérifier les doublons par référence avec l'état actuel
@@ -219,13 +244,7 @@ export const useAppliances = () => {
         const updated = [...currentAppliances, ...appliancesToAdd];
         console.log("État de la base après import:", updated.length, "appareils");
         
-        // Warn if dataset is getting very large
-        if (updated.length > 50000) {
-          console.warn(`⚠️ Base de données très volumineuse: ${updated.length} appareils`);
-          console.warn("Performances et sauvegarde pourraient être impactées");
-        }
-        
-        console.log("=== FIN IMPORT APPAREILS AVEC PROTECTION QUOTA ===");
+        console.log("=== FIN IMPORT APPAREILS AVEC INDEXEDDB ===");
         return updated;
       }
       
@@ -239,27 +258,43 @@ export const useAppliances = () => {
     return uniqueCount;
   }, [appliances]);
 
-  // Supprimer un appareil
-  const deleteAppliance = (id: string) => {
-    setAppliances(prev => prev.filter(appliance => appliance.id !== id));
-    
-    // Supprimer également les associations avec cette référence d'appareil
-    setAppliancePartAssociations(prev => 
-      prev.filter(assoc => assoc.applianceId !== id)
-    );
+  // Supprimer un appareil (maintenant avec IndexedDB)
+  const deleteAppliance = async (id: string) => {
+    try {
+      setAppliances(prev => prev.filter(appliance => appliance.id !== id));
+      
+      // Supprimer également les associations avec cette référence d'appareil
+      setAppliancePartAssociations(prev => 
+        prev.filter(assoc => assoc.applianceId !== id)
+      );
+
+      // Supprimer de IndexedDB
+      if (migrationReady) {
+        await indexedDBService.deleteAppliance(id);
+      }
+    } catch (error) {
+      console.error("❌ Erreur lors de la suppression:", error);
+      toast.error("Erreur lors de la suppression de l'appareil");
+    }
   };
   
-  // Vider complètement la base de données
-  const clearDatabase = () => {
-    setAppliances([]);
-    setAppliancePartAssociations([]);
-    setImportSessions({});
-    setKnownPartReferences([]);
-    localStorage.removeItem("appliances");
-    localStorage.removeItem("knownPartReferences");
-    localStorage.removeItem("appliancePartAssociations");
-    localStorage.removeItem("importSessions");
-    console.log("=== BASE DE DONNÉES NETTOYÉE ===");
+  // Vider complètement la base de données (maintenant avec IndexedDB)
+  const clearDatabase = async () => {
+    try {
+      setAppliances([]);
+      setAppliancePartAssociations([]);
+      setImportSessions({});
+      setKnownPartReferences([]);
+
+      if (migrationReady) {
+        await indexedDBService.clearAllData();
+      }
+      
+      console.log("=== BASE DE DONNÉES NETTOYÉE (INDEXEDDB) ===");
+    } catch (error) {
+      console.error("❌ Erreur lors du nettoyage:", error);
+      toast.error("Erreur lors du nettoyage de la base de données");
+    }
   };
 
   // Nettoyer la base de données (supprimer les doublons)
@@ -391,7 +426,7 @@ export const useAppliances = () => {
 
   // Associer des appareils à une référence de pièce avec validation robuste
   const associateApplicancesToPartReference = useCallback((applianceIds: string[], partReference: string) => {
-    console.log("=== DÉBUT ASSOCIATION ROBUSTE ===");
+    console.log("=== DÉBUT ASSOCIATION ROBUSTE AVEC INDEXEDDB ===");
     console.log("IDs reçus:", applianceIds);
     console.log("Référence pièce:", partReference);
     
@@ -439,7 +474,6 @@ export const useAppliances = () => {
       setKnownPartReferences(currentRefs => {
         if (!currentRefs.includes(partReference)) {
           const updatedRefs = [...currentRefs, partReference];
-          safeSaveToLocalStorage("knownPartReferences", updatedRefs);
           console.log("Nouvelle référence de pièce ajoutée:", partReference);
           return updatedRefs;
         }
@@ -482,7 +516,7 @@ export const useAppliances = () => {
       return currentAppliances;
     });
     
-    console.log("=== FIN ASSOCIATION ROBUSTE ===");
+    console.log("=== FIN ASSOCIATION ROBUSTE AVEC INDEXEDDB ===");
     console.log("Appareils associés avec succès:", successCount);
     return successCount;
   }, []);
@@ -574,6 +608,8 @@ export const useAppliances = () => {
     getImportSession,
     deleteImportSession,
     recentAppliances,
-    appliancesWithMostPartRefs
+    appliancesWithMostPartRefs,
+    isLoading,
+    migrationReady
   };
 };
