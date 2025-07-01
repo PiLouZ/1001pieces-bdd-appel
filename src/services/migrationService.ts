@@ -1,5 +1,5 @@
 
-import { indexedDBService } from "./indexedDBService";
+import { sqliteService } from "./sqliteService";
 import { Appliance, ImportSession, AppliancePartAssociation } from "@/types/appliance";
 
 interface MigrationResult {
@@ -20,7 +20,7 @@ class MigrationService {
   async checkMigrationNeeded(): Promise<boolean> {
     try {
       // Vérifier si la migration a déjà été effectuée
-      const migrationStatus = await indexedDBService.loadMetadata(this.MIGRATION_KEY);
+      const migrationStatus = await sqliteService.loadMetadata(this.MIGRATION_KEY);
       if (migrationStatus === this.MIGRATION_VERSION) {
         console.log("ℹ️ Migration déjà effectuée, pas de migration nécessaire");
         return false;
@@ -31,7 +31,7 @@ class MigrationService {
       
       if (!hasLocalStorageData) {
         // Pas de données à migrer, marquer comme migré
-        await indexedDBService.saveMetadata(this.MIGRATION_KEY, this.MIGRATION_VERSION);
+        await sqliteService.saveMetadata(this.MIGRATION_KEY, this.MIGRATION_VERSION);
         console.log("ℹ️ Aucune donnée à migrer, migration marquée comme terminée");
         return false;
       }
@@ -80,8 +80,8 @@ class MigrationService {
       await this.migratePartReferences(result);
       
       // Marquer la migration comme terminée
-      await indexedDBService.saveMetadata(this.MIGRATION_KEY, this.MIGRATION_VERSION);
-      await indexedDBService.saveMetadata("migration_date", new Date().toISOString());
+      await sqliteService.saveMetadata(this.MIGRATION_KEY, this.MIGRATION_VERSION);
+      await sqliteService.saveMetadata("migration_date", new Date().toISOString());
       
       result.success = true;
       console.log("✅ Migration terminée avec succès");
@@ -106,7 +106,7 @@ class MigrationService {
       if (appliancesData) {
         const appliances: Appliance[] = JSON.parse(appliancesData);
         if (Array.isArray(appliances) && appliances.length > 0) {
-          await indexedDBService.saveAppliances(appliances);
+          await sqliteService.saveAppliances(appliances);
           result.migratedData.appliances = appliances.length;
           console.log(`✅ ${appliances.length} appareils migrés`);
         }
@@ -123,7 +123,7 @@ class MigrationService {
       if (associationsData) {
         const associations: AppliancePartAssociation[] = JSON.parse(associationsData);
         if (Array.isArray(associations) && associations.length > 0) {
-          await indexedDBService.saveAssociations(associations);
+          await sqliteService.saveAssociations(associations);
           result.migratedData.associations = associations.length;
           console.log(`✅ ${associations.length} associations migrées`);
         }
@@ -140,7 +140,7 @@ class MigrationService {
       if (sessionsData) {
         const sessions: Record<string, ImportSession> = JSON.parse(sessionsData);
         if (typeof sessions === 'object' && Object.keys(sessions).length > 0) {
-          await indexedDBService.saveImportSessions(sessions);
+          await sqliteService.saveImportSessions(sessions);
           result.migratedData.sessions = Object.keys(sessions).length;
           console.log(`✅ ${Object.keys(sessions).length} sessions d'import migrées`);
         }
@@ -157,7 +157,7 @@ class MigrationService {
       if (partRefsData) {
         const partReferences: string[] = JSON.parse(partRefsData);
         if (Array.isArray(partReferences) && partReferences.length > 0) {
-          await indexedDBService.savePartReferences(partReferences);
+          await sqliteService.savePartReferences(partReferences);
           result.migratedData.partReferences = partReferences.length;
           console.log(`✅ ${partReferences.length} références de pièces migrées`);
         }
@@ -192,7 +192,7 @@ class MigrationService {
       console.log("🔄 Rollback de la migration...");
       
       // Effacer le marqueur de migration
-      await indexedDBService.saveMetadata(this.MIGRATION_KEY, null);
+      await sqliteService.saveMetadata(this.MIGRATION_KEY, null);
       
       // Optionnel : vider IndexedDB si besoin
       // await indexedDBService.clearAllData();
@@ -211,9 +211,9 @@ class MigrationService {
     storageInfo?: any;
   }> {
     try {
-      const migrationStatus = await indexedDBService.loadMetadata(this.MIGRATION_KEY);
-      const migrationDate = await indexedDBService.loadMetadata("migration_date");
-      const storageInfo = await indexedDBService.getStorageInfo();
+      const migrationStatus = await sqliteService.loadMetadata(this.MIGRATION_KEY);
+      const migrationDate = await sqliteService.loadMetadata("migration_date");
+      const storageInfo = await sqliteService.getStorageInfo();
       
       return {
         isMigrated: migrationStatus === this.MIGRATION_VERSION,

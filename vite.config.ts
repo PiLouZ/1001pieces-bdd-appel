@@ -19,4 +19,12 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  optimizeDeps: {
+    exclude: ['better-sqlite3']
+  },
+  build: {
+    rollupOptions: {
+      external: ['better-sqlite3']
+    }
+  }
 }));

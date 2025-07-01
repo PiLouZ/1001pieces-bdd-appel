@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Appliance, ImportSession, AppliancePartAssociation } from "../types/appliance";
 import { defaultAppliances } from "../data/defaultAppliances";
-import { indexedDBService } from "@/services/indexedDBService";
+import { sqliteService } from "@/services/sqliteService";
 import { useMigration } from "./useMigration";
 import { toast } from "sonner";
 
@@ -39,17 +39,17 @@ export const useAppliances = () => {
         loadedPartRefs,
         loadedSessions
       ] = await Promise.all([
-        indexedDBService.loadAppliances(),
-        indexedDBService.loadAssociations(),
-        indexedDBService.loadPartReferences(),
-        indexedDBService.loadImportSessions()
+        sqliteService.loadAppliances(),
+        sqliteService.loadAssociations(),
+        sqliteService.loadPartReferences(),
+        sqliteService.loadImportSessions()
       ]);
 
       // Si aucun appareil n'est trouvé, utiliser les données par défaut
       if (loadedAppliances.length === 0) {
         console.log("📦 Aucun appareil trouvé, utilisation des données par défaut");
         setAppliances(defaultAppliances);
-        await indexedDBService.saveAppliances(defaultAppliances);
+        await sqliteService.saveAppliances(defaultAppliances);
       } else {
         setAppliances(loadedAppliances);
       }
@@ -75,7 +75,7 @@ export const useAppliances = () => {
     if (!migrationReady || appliancesToSave.length === 0) return;
 
     try {
-      await indexedDBService.saveAppliances(appliancesToSave);
+      await sqliteService.saveAppliances(appliancesToSave);
     } catch (error) {
       console.error("❌ Erreur sauvegarde appareils:", error);
       toast.error("Erreur lors de la sauvegarde des appareils");
@@ -87,7 +87,7 @@ export const useAppliances = () => {
     if (!migrationReady || associationsToSave.length === 0) return;
 
     try {
-      await indexedDBService.saveAssociations(associationsToSave);
+      await sqliteService.saveAssociations(associationsToSave);
     } catch (error) {
       console.error("❌ Erreur sauvegarde associations:", error);
       toast.error("Erreur lors de la sauvegarde des associations");
@@ -99,7 +99,7 @@ export const useAppliances = () => {
     if (!migrationReady || Object.keys(sessionsToSave).length === 0) return;
 
     try {
-      await indexedDBService.saveImportSessions(sessionsToSave);
+      await sqliteService.saveImportSessions(sessionsToSave);
     } catch (error) {
       console.error("❌ Erreur sauvegarde sessions:", error);
       toast.error("Erreur lors de la sauvegarde des sessions");
@@ -111,7 +111,7 @@ export const useAppliances = () => {
     if (!migrationReady || partRefsToSave.length === 0) return;
 
     try {
-      await indexedDBService.savePartReferences(partRefsToSave);
+      await sqliteService.savePartReferences(partRefsToSave);
     } catch (error) {
       console.error("❌ Erreur sauvegarde références:", error);
       toast.error("Erreur lors de la sauvegarde des références");
@@ -270,7 +270,7 @@ export const useAppliances = () => {
 
       // Supprimer de IndexedDB
       if (migrationReady) {
-        await indexedDBService.deleteAppliance(id);
+        await sqliteService.deleteAppliance(id);
       }
     } catch (error) {
       console.error("❌ Erreur lors de la suppression:", error);
@@ -278,7 +278,7 @@ export const useAppliances = () => {
     }
   };
   
-  // Vider complètement la base de données (maintenant avec IndexedDB)
+  // Vider complètement la base de données (maintenant avec SQLite)
   const clearDatabase = async () => {
     try {
       setAppliances([]);
@@ -287,10 +287,11 @@ export const useAppliances = () => {
       setKnownPartReferences([]);
 
       if (migrationReady) {
-        await indexedDBService.clearAllData();
+        await sqliteService.clearAllData();
       }
       
-      console.log("=== BASE DE DONNÉES NETTOYÉE (INDEXEDDB) ===");
+      console.log("=== BASE DE DONNÉES NETTOYÉE (SQLITE) ===");
+      toast.success("Base de données vidée avec succès");
     } catch (error) {
       console.error("❌ Erreur lors du nettoyage:", error);
       toast.error("Erreur lors du nettoyage de la base de données");
