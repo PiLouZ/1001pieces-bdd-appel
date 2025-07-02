@@ -215,9 +215,9 @@ export const useAppliances = () => {
     return ids.length;
   };
 
-  // Importer plusieurs appareils avec une approche améliorée et protection quota
+  // Importer plusieurs appareils avec une approche simplifiée
   const importAppliances = useCallback((newAppliances: Appliance[]) => {
-    console.log("=== DÉBUT IMPORT APPAREILS AVEC INDEXEDDB ===");
+    console.log("=== DÉBUT IMPORT APPAREILS SIMPLIFIÉ ===");
     console.log("Appareils à importer:", newAppliances.length);
     
     if (newAppliances.length === 0) {
@@ -226,36 +226,33 @@ export const useAppliances = () => {
     }
     
     // Vérifier les doublons par référence avec l'état actuel
-    setAppliances(currentAppliances => {
-      const existingRefs = new Set(currentAppliances.map(app => app.reference));
-      const uniqueNewAppliances = newAppliances.filter(app => !existingRefs.has(app.reference));
-      
-      console.log("Appareils existants:", currentAppliances.length);
-      console.log("Nouveaux appareils uniques:", uniqueNewAppliances.length);
-      
-      if (uniqueNewAppliances.length > 0) {
-        // Ajouter les nouveaux appareils avec des IDs générés
-        const appliancesToAdd = uniqueNewAppliances.map(app => ({
-          ...app,
-          id: app.id || `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          dateAdded: app.dateAdded || new Date().toISOString().split("T")[0]
-        }));
-        
-        const updated = [...currentAppliances, ...appliancesToAdd];
-        console.log("État de la base après import:", updated.length, "appareils");
-        
-        console.log("=== FIN IMPORT APPAREILS AVEC INDEXEDDB ===");
-        return updated;
-      }
-      
-      console.log("=== FIN IMPORT (AUCUN NOUVEAU) ===");
-      return currentAppliances;
-    });
-    
-    // Retourner le nombre d'appareils uniques importés
     const existingRefs = new Set(appliances.map(app => app.reference));
-    const uniqueCount = newAppliances.filter(app => !existingRefs.has(app.reference)).length;
-    return uniqueCount;
+    const uniqueNewAppliances = newAppliances.filter(app => !existingRefs.has(app.reference));
+    
+    console.log("Appareils existants:", appliances.length);
+    console.log("Nouveaux appareils uniques:", uniqueNewAppliances.length);
+    
+    if (uniqueNewAppliances.length > 0) {
+      // Ajouter les nouveaux appareils avec des IDs générés
+      const appliancesToAdd = uniqueNewAppliances.map(app => ({
+        ...app,
+        id: app.id || `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        dateAdded: app.dateAdded || new Date().toISOString().split("T")[0]
+      }));
+      
+      // Mettre à jour l'état immédiatement
+      setAppliances(prev => {
+        const updated = [...prev, ...appliancesToAdd];
+        console.log("État de la base après import:", updated.length, "appareils");
+        return updated;
+      });
+      
+      console.log("=== FIN IMPORT APPAREILS SIMPLIFIÉ ===");
+      return uniqueNewAppliances.length;
+    }
+    
+    console.log("=== FIN IMPORT (AUCUN NOUVEAU) ===");
+    return 0;
   }, [appliances]);
 
   // Supprimer un appareil (maintenant avec IndexedDB)

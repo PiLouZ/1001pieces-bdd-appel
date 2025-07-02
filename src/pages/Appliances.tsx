@@ -1,13 +1,16 @@
+
 import React, { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Navigation from "@/components/Navigation";
 import { Database, Loader2 } from "lucide-react";
 import SearchBar from "@/components/SearchBar";
 import ApplianceList from "@/components/ApplianceList";
+import ApplianceEditDialog from "@/components/ApplianceEditDialog";
 import { useAppliances } from "@/hooks/useAppliances";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import ImportSessionFilter from "@/components/ImportSessionFilter";
+import { Appliance } from "@/types/appliance";
 
 const Appliances: React.FC = () => {
   const {
@@ -22,11 +25,18 @@ const Appliances: React.FC = () => {
     migrationReady,
     getAppliancesByPartReference,
     knownPartReferences,
-    recentAppliances
+    knownBrands,
+    knownTypes,
+    recentAppliances,
+    getPartReferencesForAppliance,
+    associateApplicancesToPartReference,
+    removeAppliancePartAssociation
   } = useAppliances();
 
   const [selectedSession, setSelectedSession] = useState<string | null>(null);
   const [showLastSessionOnly, setShowLastSessionOnly] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingAppliance, setEditingAppliance] = useState<Appliance | null>(null);
 
   // Simuler des sessions d'import pour la démonstration
   const importSessions = useMemo(() => {
@@ -85,6 +95,17 @@ const Appliances: React.FC = () => {
       appliance.type.toLowerCase().includes(searchQuery.toLowerCase())
     );
   }, [searchQuery, filteredBySession, knownPartReferences, getAppliancesByPartReference]);
+
+  const handleEditAppliance = (appliance: Appliance) => {
+    setEditingAppliance(appliance);
+    setEditDialogOpen(true);
+  };
+
+  const handleSaveAppliance = (updatedAppliance: Appliance) => {
+    updateAppliance(updatedAppliance);
+    setEditDialogOpen(false);
+    setEditingAppliance(null);
+  };
 
   if (!migrationReady) {
     return (
@@ -171,14 +192,27 @@ const Appliances: React.FC = () => {
               ) : (
                 <ApplianceList 
                   appliances={enhancedSearch} 
-                  onEdit={updateAppliance}
+                  onEdit={handleEditAppliance}
                   onDelete={deleteAppliance}
+                  knownPartReferences={knownPartReferences}
+                  getPartReferencesForAppliance={getPartReferencesForAppliance}
+                  associateAppliancesToPartReference={associateApplicancesToPartReference}
+                  onRemoveAssociation={removeAppliancePartAssociation}
                 />
               )}
             </CardContent>
           </Card>
         </div>
       </main>
+      
+      <ApplianceEditDialog
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+        appliance={editingAppliance}
+        onSave={handleSaveAppliance}
+        knownBrands={knownBrands}
+        knownTypes={knownTypes}
+      />
       
       <footer className="bg-gray-100 p-4 text-center text-gray-600">
         <p>© {new Date().getFullYear()} - Gestionnaire d'Appareils Électroménagers</p>
