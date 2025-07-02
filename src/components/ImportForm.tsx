@@ -98,7 +98,6 @@ const ImportForm: React.FC<ImportFormProps> = (props) => {
       <QuickEditForm
         appliances={appliancesWithMissingInfo}
         onUpdateAppliances={handleCompleteMissingInfo}
-        onCancel={handleCancelMissingInfo}
         knownBrands={props.knownBrands || []}
         knownTypes={props.knownTypes || []}
       />

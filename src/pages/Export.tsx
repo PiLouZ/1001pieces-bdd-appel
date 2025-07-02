@@ -44,21 +44,21 @@ const Export: React.FC = () => {
       return;
     }
 
-    // Personnaliser les en-têtes selon les colonnes sélectionnées
-    const headers: Record<string, string> = {
-      type: "Type d'appareil",
-      brand: "Marque",
-      reference: "Référence technique",
-      commercialRef: "Référence commerciale",
-      dateAdded: "Date d'ajout"
-    };
+    // Filtrer les appareils selon les colonnes sélectionnées
+    const filteredData = filteredAppliances.map(app => {
+      const filteredApp: any = {};
+      if (selectedColumns.type) filteredApp.type = app.type;
+      if (selectedColumns.brand) filteredApp.brand = app.brand;
+      if (selectedColumns.reference) filteredApp.reference = app.reference;
+      if (selectedColumns.commercialRef) filteredApp.commercialRef = app.commercialRef;
+      if (selectedColumns.dateAdded) filteredApp.dateAdded = app.dateAdded;
+      return filteredApp;
+    });
 
-    const csvContent = exportAppliances(filteredAppliances, {
+    const csvContent = exportAppliances(filteredData, {
       format: "csv",
       includeHeader: includeHeaders,
-      partReference: selectedPartReference,
-      selectedColumns,
-      customHeaders: headers
+      partReference: selectedPartReference
     });
 
     const fileName = customFileName || 

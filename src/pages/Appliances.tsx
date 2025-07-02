@@ -134,8 +134,8 @@ const Appliances: React.FC = () => {
             </CardHeader>
             <CardContent className="space-y-4">
               <SearchBar 
-                searchQuery={searchQuery} 
-                onSearchChange={setSearchQuery}
+                value={searchQuery} 
+                onChange={setSearchQuery}
                 placeholder="Rechercher par référence, marque, type ou référence de pièce..."
                 knownPartReferences={knownPartReferences}
               />
@@ -172,8 +172,8 @@ const Appliances: React.FC = () => {
               ) : (
                 <ApplianceList 
                   appliances={enhancedSearch} 
-                  onUpdateAppliance={updateAppliance}
-                  onDeleteAppliance={deleteAppliance}
+                  onUpdate={updateAppliance}
+                  onDelete={deleteAppliance}
                 />
               )}
             </CardContent>
