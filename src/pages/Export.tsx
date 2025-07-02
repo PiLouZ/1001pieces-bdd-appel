@@ -1,202 +1,130 @@
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Navigation from "@/components/Navigation";
-import { useAppliances } from "@/hooks/useAppliances";
-import { downloadCSV, exportAppliances, generateBrandAnchors, generateBrandGroupedHTML } from "@/utils/exportUtils";
-import { FileDown, Database, FileText, Copy, Check } from "lucide-react";
+import { Download, FileText, Code, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
-import { Tabs, TabsList, TabsContent, TabsTrigger } from "@/components/ui/tabs";
-import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useAppliances } from "@/hooks/useAppliances";
+import { exportAppliances, generateCSVFile } from "@/utils/exportUtils";
+import { Checkbox } from "@/components/ui/checkbox";
+import HtmlExportZones from "@/components/HtmlExportZones";
 
 const Export: React.FC = () => {
   const { 
-    appliances: allAppliances = [], 
-    knownPartReferences = [],
-    knownBrands = [],
-    knownTypes = [],
-    getAppliancesByPartReference = () => []
+    allAppliances, 
+    knownPartReferences, 
+    getAppliancesByPartReference,
+    isLoading 
   } = useAppliances();
   
-  const [selectedFormat, setSelectedFormat] = useState<"csv" | "html" | "json">("csv");
-  const [includeHeader, setIncludeHeader] = useState(true);
   const [selectedPartReference, setSelectedPartReference] = useState("");
-  const [exportType, setExportType] = useState<"all" | "by-part-reference" | "by-brand-type">("all");
-  const [searchPartRef, setSearchPartRef] = useState(""); 
-  const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
-  const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
-  const [searchBrand, setSearchBrand] = useState("");
-  const [searchType, setSearchType] = useState("");
-  const [brandAnchorsHTML, setBrandAnchorsHTML] = useState("");
-  const [brandGroupedHTML, setBrandGroupedHTML] = useState("");
-  const [copiedAnchors, setCopiedAnchors] = useState(false);
-  const [copiedGrouped, setCopiedGrouped] = useState(false);
+  const [includeHeaders, setIncludeHeaders] = useState(true);
+  const [customFileName, setCustomFileName] = useState("");
+  const [selectedColumns, setSelectedColumns] = useState({
+    type: true,
+    brand: true,
+    reference: true,
+    commercialRef: true,
+    dateAdded: false
+  });
 
-  const safeAppliances = Array.isArray(allAppliances) ? allAppliances : [];
-  const safePartReferences = Array.isArray(knownPartReferences) ? knownPartReferences : [];
-  const safeBrands = Array.isArray(knownBrands) ? knownBrands : [];
-  const safeTypes = Array.isArray(knownTypes) ? knownTypes : [];
-  
-  const filteredPartReferences = React.useMemo(() => {
-    if (!searchPartRef || !Array.isArray(safePartReferences)) return safePartReferences;
-    
-    return safePartReferences.filter(ref => 
-      ref && typeof ref === 'string' && ref.toLowerCase().includes(searchPartRef.toLowerCase())
-    );
-  }, [searchPartRef, safePartReferences]);
+  // Appareils filtrés par référence de pièce
+  const filteredAppliances = useMemo(() => {
+    if (!selectedPartReference) return allAppliances;
+    return getAppliancesByPartReference(selectedPartReference);
+  }, [selectedPartReference, allAppliances, getAppliancesByPartReference]);
 
-  const filteredBrands = React.useMemo(() => {
-    if (!searchBrand || !Array.isArray(safeBrands)) return safeBrands;
-    
-    return safeBrands.filter(brand => 
-      brand && typeof brand === 'string' && brand.toLowerCase().includes(searchBrand.toLowerCase())
-    );
-  }, [searchBrand, safeBrands]);
-
-  const filteredTypes = React.useMemo(() => {
-    if (!searchType || !Array.isArray(safeTypes)) return safeTypes;
-    
-    return safeTypes.filter(type => 
-      type && typeof type === 'string' && type.toLowerCase().includes(searchType.toLowerCase())
-    );
-  }, [searchType, safeTypes]);
-  
-  const getCompatibleAppliances = (partRef: string) => {
-    if (!getAppliancesByPartReference || !partRef) return [];
-    try {
-      const result = getAppliancesByPartReference(partRef);
-      return Array.isArray(result) ? result : [];
-    } catch (error) {
-      console.error("Error getting compatible appliances:", error);
-      return [];
+  const handleExportCSV = () => {
+    if (filteredAppliances.length === 0) {
+      return;
     }
-  };
 
-  const getAppliancesByBrandAndType = () => {
-    return safeAppliances.filter(appliance => {
-      const brandMatch = selectedBrands.length === 0 || selectedBrands.includes(appliance.brand);
-      const typeMatch = selectedTypes.length === 0 || selectedTypes.includes(appliance.type);
-      return brandMatch && typeMatch;
+    // Personnaliser les en-têtes selon les colonnes sélectionnées
+    const headers: Record<string, string> = {
+      type: "Type d'appareil",
+      brand: "Marque",
+      reference: "Référence technique",
+      commercialRef: "Référence commerciale",
+      dateAdded: "Date d'ajout"
+    };
+
+    const csvContent = exportAppliances(filteredAppliances, {
+      format: "csv",
+      includeHeader: includeHeaders,
+      partReference: selectedPartReference,
+      selectedColumns,
+      customHeaders: headers
     });
+
+    const fileName = customFileName || 
+      `export-appareils${selectedPartReference ? `-compatibles-${selectedPartReference}` : ''}-${new Date().toISOString().split('T')[0]}`;
+    
+    const csvData = generateCSVFile(csvContent, fileName);
+    
+    const link = document.createElement("a");
+    link.setAttribute("href", csvData.url);
+    link.setAttribute("download", csvData.fileName);
+    link.style.visibility = "hidden";
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(csvData.url);
   };
 
-  const handleBrandToggle = (brand: string) => {
-    setSelectedBrands(prev => 
-      prev.includes(brand) 
-        ? prev.filter(b => b !== brand)
-        : [...prev, brand]
-    );
-  };
+  const generatePreview = () => {
+    if (filteredAppliances.length === 0) return "";
 
-  const handleTypeToggle = (type: string) => {
-    setSelectedTypes(prev => 
-      prev.includes(type) 
-        ? prev.filter(t => t !== type)
-        : [...prev, type]
-    );
-  };
+    const headers = [];
+    if (selectedColumns.type) headers.push("Type d'appareil");
+    if (selectedColumns.brand) headers.push("Marque");
+    if (selectedColumns.reference) headers.push("Référence technique");
+    if (selectedColumns.commercialRef) headers.push("Référence commerciale");
+    if (selectedColumns.dateAdded) headers.push("Date d'ajout");
 
-  const copyToClipboard = async (text: string, setCopied: React.Dispatch<React.SetStateAction<boolean>>) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-      toast("Copié dans le presse-papiers");
-    } catch (err) {
-      toast("Erreur lors de la copie");
-      console.error('Failed to copy:', err);
+    let preview = "";
+    if (includeHeaders) {
+      preview += headers.join(";") + "\n";
     }
-  };
-  
-  const handleExport = () => {
-    try {
-      if (exportType === "by-part-reference" && !selectedPartReference) {
-        toast("Veuillez sélectionner une référence de pièce");
-        return;
-      }
 
-      if (exportType === "by-brand-type" && selectedBrands.length === 0 && selectedTypes.length === 0) {
-        toast("Veuillez sélectionner au moins une marque ou un type");
-        return;
-      }
+    const previewData = filteredAppliances.slice(0, 5).map(app => {
+      const row = [];
+      if (selectedColumns.type) row.push(app.type);
+      if (selectedColumns.brand) row.push(app.brand);
+      if (selectedColumns.reference) row.push(app.reference);
+      if (selectedColumns.commercialRef) row.push(app.commercialRef || "");
+      if (selectedColumns.dateAdded) row.push(app.dateAdded);
+      return row.join(";");
+    });
 
-      let appliancesToExport = safeAppliances;
-      let fileName = `export-appareils-${new Date().toISOString().split('T')[0]}`;
-      
-      if (exportType === "by-part-reference" && selectedPartReference) {
-        appliancesToExport = getCompatibleAppliances(selectedPartReference);
-        fileName = `export-appareils-compatibles-${selectedPartReference}-${new Date().toISOString().split('T')[0]}`;
-        
-        if (appliancesToExport.length === 0) {
-          toast("Aucun appareil n'est compatible avec cette référence de pièce");
-          return;
-        }
-      } else if (exportType === "by-brand-type") {
-        appliancesToExport = getAppliancesByBrandAndType();
-        const brandPart = selectedBrands.length > 0 ? `marques-${selectedBrands.join('-')}` : '';
-        const typePart = selectedTypes.length > 0 ? `types-${selectedTypes.join('-')}` : '';
-        const filterPart = [brandPart, typePart].filter(Boolean).join('-');
-        fileName = `export-appareils-${filterPart}-${new Date().toISOString().split('T')[0]}`;
-        
-        if (appliancesToExport.length === 0) {
-          toast("Aucun appareil ne correspond aux critères sélectionnés");
-          return;
-        }
-      }
-      
-      if (appliancesToExport.length === 0) {
-        toast("Aucun appareil à exporter");
-        return;
-      }
-      
-      // Toujours générer le CSV et le télécharger automatiquement
-      const csvContent = exportAppliances(appliancesToExport, { 
-        format: "csv",
-        includeHeader: includeHeader,
-        partReference: exportType === "by-part-reference" ? selectedPartReference : undefined
-      });
-      downloadCSV(csvContent, fileName);
-
-      if (selectedFormat === "html") {
-        // Générer les deux formats HTML demandés
-        const brandAnchors = generateBrandAnchors(appliancesToExport);
-        const brandGrouped = generateBrandGroupedHTML(appliancesToExport);
-        
-        setBrandAnchorsHTML(brandAnchors);
-        setBrandGroupedHTML(brandGrouped);
-        
-        toast(`${appliancesToExport.length} appareils ont été exportés en format HTML et CSV`);
-      } else if (selectedFormat === "json") {
-        const jsonContent = exportAppliances(appliancesToExport, { 
-          format: "json",
-          partReference: exportType === "by-part-reference" ? selectedPartReference : undefined
-        });
-        
-        const blob = new Blob([jsonContent], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = `${fileName}.json`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-        
-        toast(`${appliancesToExport.length} appareils ont été exportés au format JSON et CSV`);
-      } else {
-        toast(`${appliancesToExport.length} appareils ont été exportés au format CSV`);
-      }
-    } catch (error) {
-      toast("Une erreur est survenue lors de l'exportation");
-      console.error("Export error:", error);
+    preview += previewData.join("\n");
+    if (filteredAppliances.length > 5) {
+      preview += "\n...";
     }
+
+    return preview;
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col min-h-screen">
+        <Navigation />
+        <main className="flex-1 container mx-auto py-8 px-4">
+          <Card className="w-full">
+            <CardContent className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin mr-3" />
+              <span className="text-lg">Chargement des données...</span>
+            </CardContent>
+          </Card>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -204,272 +132,165 @@ const Export: React.FC = () => {
       
       <main className="flex-1 container mx-auto py-8 px-4">
         <h1 className="text-3xl font-bold mb-6 flex items-center">
-          <FileDown className="mr-2 h-6 w-6" />
+          <Download className="mr-2 h-6 w-6" />
           Exporter les données
         </h1>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card>
             <CardHeader>
-              <CardTitle>Paramètres d'exportation</CardTitle>
+              <CardTitle className="flex items-center">
+                <FileText className="mr-2 h-5 w-5" />
+                Configuration de l'export
+              </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-6">
+            <CardContent className="space-y-4">
+              {/* Filtrage par référence de pièce */}
               <div>
-                <h3 className="text-lg font-medium mb-2">Type d'exportation</h3>
-                <RadioGroup 
-                  defaultValue="all" 
-                  value={exportType} 
-                  onValueChange={(value) => setExportType(value as "all" | "by-part-reference" | "by-brand-type")}
-                  className="space-y-2"
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="all" id="all" />
-                    <Label htmlFor="all">Tous les appareils ({safeAppliances.length})</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="by-part-reference" id="by-part-reference" />
-                    <Label htmlFor="by-part-reference">Par référence de pièce</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="by-brand-type" id="by-brand-type" />
-                    <Label htmlFor="by-brand-type">Par marque et/ou type</Label>
-                  </div>
-                </RadioGroup>
-                
-                {exportType === "by-part-reference" && (
-                  <div className="mt-4 pl-6">
-                    <Label htmlFor="part-reference">Référence de la pièce</Label>
-                    <div className="mt-2">
-                      <div className="flex space-x-2">
-                        <Input 
-                          type="text"
-                          placeholder="Rechercher..." 
-                          value={searchPartRef}
-                          onChange={(e) => setSearchPartRef(e.target.value)}
-                          className="mb-2"
-                        />
-                      </div>
-                      <select 
-                        className="w-full p-2 border rounded-md"
-                        value={selectedPartReference}
-                        onChange={(e) => setSelectedPartReference(e.target.value)}
-                      >
-                        <option value="">Sélectionner une référence de pièce</option>
-                        {filteredPartReferences && filteredPartReferences.map((ref) => (
-                          <option key={ref} value={ref}>
-                            {ref}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                )}
-
-                {exportType === "by-brand-type" && (
-                  <div className="mt-4 pl-6 space-y-4">
-                    <div>
-                      <Label>Marques</Label>
-                      <Input 
-                        type="text"
-                        placeholder="Rechercher une marque..." 
-                        value={searchBrand}
-                        onChange={(e) => setSearchBrand(e.target.value)}
-                        className="mb-2"
-                      />
-                      <div className="max-h-32 overflow-y-auto border rounded p-2 space-y-2">
-                        {filteredBrands.map((brand) => (
-                          <div key={brand} className="flex items-center space-x-2">
-                            <Checkbox
-                              id={`brand-${brand}`}
-                              checked={selectedBrands.includes(brand)}
-                              onCheckedChange={() => handleBrandToggle(brand)}
-                            />
-                            <Label htmlFor={`brand-${brand}`} className="text-sm">{brand}</Label>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div>
-                      <Label>Types</Label>
-                      <Input 
-                        type="text"
-                        placeholder="Rechercher un type..." 
-                        value={searchType}
-                        onChange={(e) => setSearchType(e.target.value)}
-                        className="mb-2"
-                      />
-                      <div className="max-h-32 overflow-y-auto border rounded p-2 space-y-2">
-                        {filteredTypes.map((type) => (
-                          <div key={type} className="flex items-center space-x-2">
-                            <Checkbox
-                              id={`type-${type}`}
-                              checked={selectedTypes.includes(type)}
-                              onCheckedChange={() => handleTypeToggle(type)}
-                            />
-                            <Label htmlFor={`type-${type}`} className="text-sm">{type}</Label>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
+                <Label htmlFor="part-reference">Filtrer par référence de pièce</Label>
+                <Select value={selectedPartReference} onValueChange={setSelectedPartReference}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Toutes les pièces" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Toutes les pièces</SelectItem>
+                    {knownPartReferences.map(ref => (
+                      <SelectItem key={ref} value={ref}>{ref}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-gray-500 mt-1">
+                  {selectedPartReference ? 
+                    `${filteredAppliances.length} appareils compatibles` : 
+                    `${allAppliances.length} appareils au total`
+                  }
+                </p>
               </div>
-              
+
+              {/* Sélection des colonnes */}
               <div>
-                <h3 className="text-lg font-medium mb-2">Format</h3>
-                <Tabs defaultValue="csv" value={selectedFormat} onValueChange={(value) => setSelectedFormat(value as "csv" | "html" | "json")}>
-                  <TabsList className="grid w-full grid-cols-3">
-                    <TabsTrigger value="csv">CSV (Excel)</TabsTrigger>
-                    <TabsTrigger value="html">HTML</TabsTrigger>
-                    <TabsTrigger value="json">JSON</TabsTrigger>
-                  </TabsList>
-                  <TabsContent value="csv" className="pt-4">
-                    <div className="flex items-center space-x-2">
-                      <Switch 
-                        id="include-header" 
-                        checked={includeHeader} 
-                        onCheckedChange={setIncludeHeader} 
-                      />
-                      <Label htmlFor="include-header">Inclure en-tête des colonnes</Label>
-                    </div>
-                    <p className="text-sm text-gray-500 mt-2">
-                      Format CSV compatible avec Excel et autres tableurs.
-                    </p>
-                  </TabsContent>
-                  <TabsContent value="html" className="pt-4">
-                    <div className="flex items-center space-x-2">
-                      <Switch 
-                        id="include-header-html" 
-                        checked={includeHeader} 
-                        onCheckedChange={setIncludeHeader} 
-                      />
-                      <Label htmlFor="include-header-html">Inclure en-tête des colonnes</Label>
-                    </div>
-                    <p className="text-sm text-gray-500">
-                      Format HTML avec deux extraits copiables : liens d'ancrage et liste groupée par marque.
-                    </p>
-                  </TabsContent>
-                  <TabsContent value="json" className="pt-4">
-                    <p className="text-sm text-gray-500">
-                      Format JSON pour intégration avec d'autres applications.
-                    </p>
-                  </TabsContent>
-                </Tabs>
+                <Label>Colonnes à exporter</Label>
+                <div className="grid grid-cols-2 gap-2 mt-2">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="col-type"
+                      checked={selectedColumns.type}
+                      onCheckedChange={(checked) => 
+                        setSelectedColumns(prev => ({ ...prev, type: !!checked }))
+                      }
+                    />
+                    <Label htmlFor="col-type" className="text-sm">Type d'appareil</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="col-brand"
+                      checked={selectedColumns.brand}
+                      onCheckedChange={(checked) => 
+                        setSelectedColumns(prev => ({ ...prev, brand: !!checked }))
+                      }
+                    />
+                    <Label htmlFor="col-brand" className="text-sm">Marque</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="col-reference"
+                      checked={selectedColumns.reference}
+                      onCheckedChange={(checked) => 
+                        setSelectedColumns(prev => ({ ...prev, reference: !!checked }))
+                      }
+                    />
+                    <Label htmlFor="col-reference" className="text-sm">Référence technique</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="col-commercial"
+                      checked={selectedColumns.commercialRef}
+                      onCheckedChange={(checked) => 
+                        setSelectedColumns(prev => ({ ...prev, commercialRef: !!checked }))
+                      }
+                    />
+                    <Label htmlFor="col-commercial" className="text-sm">Référence commerciale</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="col-date"
+                      checked={selectedColumns.dateAdded}
+                      onCheckedChange={(checked) => 
+                        setSelectedColumns(prev => ({ ...prev, dateAdded: !!checked }))
+                      }
+                    />
+                    <Label htmlFor="col-date" className="text-sm">Date d'ajout</Label>
+                  </div>
+                </div>
               </div>
+
+              {/* Options */}
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="include-headers"
+                  checked={includeHeaders}
+                  onCheckedChange={(checked) => setIncludeHeaders(!!checked)}
+                />
+                <Label htmlFor="include-headers">Inclure les en-têtes de colonnes</Label>
+              </div>
+
+              {/* Nom de fichier personnalisé */}
+              <div>
+                <Label htmlFor="filename">Nom de fichier (optionnel)</Label>
+                <Input
+                  id="filename"
+                  value={customFileName}
+                  onChange={(e) => setCustomFileName(e.target.value)}
+                  placeholder="export-appareils"
+                />
+              </div>
+
+              <Button 
+                onClick={handleExportCSV} 
+                disabled={filteredAppliances.length === 0}
+                className="w-full"
+              >
+                <Download className="mr-2 h-4 w-4" />
+                Télécharger le fichier CSV
+              </Button>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardHeader>
-              <CardTitle>Aperçu et téléchargement</CardTitle>
+              <CardTitle>Aperçu de l'export</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-6">
-              {selectedFormat === "html" && brandAnchorsHTML && brandGroupedHTML ? (
-                <div className="space-y-6">
-                  <div>
-                    <Label className="mb-2 block">Liens d'ancrage</Label>
-                    <div className="flex mb-2">
-                      <Textarea 
-                        value={brandAnchorsHTML} 
-                        readOnly 
-                        className="font-mono text-xs resize-none flex-grow"
-                        rows={3}
-                      />
-                      <Button 
-                        variant="outline" 
-                        className="ml-2" 
-                        onClick={() => copyToClipboard(brandAnchorsHTML, setCopiedAnchors)}
-                      >
-                        {copiedAnchors ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                      </Button>
-                    </div>
-                  </div>
-                  <div>
-                    <Label className="mb-2 block">Contenu groupé par marque</Label>
-                    <div className="flex">
-                      <Textarea 
-                        value={brandGroupedHTML} 
-                        readOnly 
-                        className="font-mono text-xs resize-none flex-grow"
-                        rows={10}
-                      />
-                      <Button 
-                        variant="outline" 
-                        className="ml-2" 
-                        onClick={() => copyToClipboard(brandGroupedHTML, setCopiedGrouped)}
-                      >
-                        {copiedGrouped ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="bg-gray-50 p-4 rounded-md border h-56 overflow-auto">
-                  {exportType === "all" ? (
-                    <div className="flex flex-col items-center justify-center h-full">
-                      <Database className="h-10 w-10 text-gray-400 mb-2" />
-                      <p className="text-center text-gray-500">
-                        {safeAppliances.length === 0 ? (
-                          "Aucun appareil à exporter"
-                        ) : (
-                          `${safeAppliances.length} appareils seront exportés`
-                        )}
-                      </p>
-                    </div>
-                  ) : exportType === "by-part-reference" ? (
-                    <div className="flex flex-col items-center justify-center h-full">
-                      <FileText className="h-10 w-10 text-gray-400 mb-2" />
-                      <p className="text-center text-gray-500">
-                        {!selectedPartReference ? (
-                          "Sélectionnez une référence de pièce"
-                        ) : (
-                          getCompatibleAppliances(selectedPartReference).length === 0 ? (
-                            "Aucun appareil compatible avec cette référence"
-                          ) : (
-                            `${getCompatibleAppliances(selectedPartReference).length} appareils compatibles seront exportés`
-                          )
-                        )}
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center h-full">
-                      <FileText className="h-10 w-10 text-gray-400 mb-2" />
-                      <p className="text-center text-gray-500">
-                        {selectedBrands.length === 0 && selectedTypes.length === 0 ? (
-                          "Sélectionnez au moins une marque ou un type"
-                        ) : (
-                          getAppliancesByBrandAndType().length === 0 ? (
-                            "Aucun appareil ne correspond aux critères"
-                          ) : (
-                            `${getAppliancesByBrandAndType().length} appareils seront exportés`
-                          )
-                        )}
-                      </p>
-                      {(selectedBrands.length > 0 || selectedTypes.length > 0) && (
-                        <div className="mt-2 text-sm text-gray-600">
-                          {selectedBrands.length > 0 && (
-                            <p>Marques: {selectedBrands.join(', ')}</p>
-                          )}
-                          {selectedTypes.length > 0 && (
-                            <p>Types: {selectedTypes.join(', ')}</p>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-              
-              <div className="flex justify-end">
-                <Button onClick={handleExport} disabled={safeAppliances.length === 0}>
-                  <FileDown className="mr-2 h-4 w-4" />
-                  {selectedFormat === "html" ? "Générer" : "Télécharger"}
-                </Button>
-              </div>
+            <CardContent>
+              <Textarea
+                value={generatePreview()}
+                readOnly
+                rows={10}
+                className="font-mono text-xs"
+                placeholder="Sélectionnez des données à exporter pour voir l'aperçu"
+              />
             </CardContent>
           </Card>
         </div>
+
+        {/* Zones HTML */}
+        {selectedPartReference && filteredAppliances.length > 0 && (
+          <div className="mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <Code className="mr-2 h-5 w-5" />
+                  Zones HTML pour intégration web
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <HtmlExportZones 
+                  appliances={filteredAppliances}
+                  partReference={selectedPartReference}
+                />
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </main>
       
       <footer className="bg-gray-100 p-4 text-center text-gray-600">
@@ -480,4 +301,3 @@ const Export: React.FC = () => {
 };
 
 export default Export;
-

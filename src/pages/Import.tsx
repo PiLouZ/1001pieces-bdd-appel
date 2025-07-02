@@ -17,7 +17,8 @@ const Import: React.FC = () => {
     allAppliances = [],
     associateApplicancesToPartReference,
     suggestBrand,
-    suggestType
+    suggestType,
+    isLoading
   } = useAppliances();
 
   const safeKnownBrands = Array.isArray(knownBrands) ? knownBrands : [];
@@ -68,6 +69,7 @@ const Import: React.FC = () => {
             suggestBrand={safeSuggestBrand}
             suggestType={safeSuggestType}
             associateAppliancesToPartReference={safeAssociateAppliancesToPartReference}
+            isLoading={isLoading}
           />
         </div>
       </main>
