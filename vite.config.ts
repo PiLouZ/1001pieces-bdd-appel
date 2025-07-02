@@ -1,3 +1,4 @@
+
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
@@ -26,5 +27,9 @@ export default defineConfig(({ mode }) => ({
     rollupOptions: {
       external: ['better-sqlite3']
     }
+  },
+  define: {
+    // Définir des variables d'environnement pour distinguer le contexte
+    'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development'),
   }
 }));

@@ -1,8 +1,7 @@
-import Database from 'better-sqlite3';
 import { Appliance, ImportSession, AppliancePartAssociation } from "@/types/appliance";
 
-// Configuration de la base de données SQLite
-const DB_PATH = 'appliance_database.db';
+// Détection de l'environnement
+const isNodeEnvironment = typeof window === 'undefined';
 
 // Interface pour le store de métadonnées
 interface MetadataEntry {
@@ -17,18 +16,33 @@ interface PartReference {
 }
 
 class SQLiteService {
-  private db: Database.Database | null = null;
+  private db: any = null;
+  private isInitialized = false;
 
   constructor() {
-    this.init();
+    // N'initialiser SQLite que dans un environnement Node.js
+    if (isNodeEnvironment) {
+      this.init();
+    } else {
+      console.log("📱 Environnement navigateur détecté - SQLite désactivé");
+      this.isInitialized = false;
+    }
   }
 
-  private init(): void {
+  private async init(): Promise<void> {
+    if (!isNodeEnvironment) {
+      console.log("⚠️ SQLite non disponible dans le navigateur - utilisation d'IndexedDB");
+      return;
+    }
+
     try {
       console.log("🔧 Initialisation SQLite...");
       
+      // Import dynamique de better-sqlite3 uniquement côté serveur
+      const Database = await import('better-sqlite3');
+      
       // Créer ou ouvrir la base de données
-      this.db = new Database(DB_PATH);
+      this.db = new Database.default('appliance_database.db');
       
       // Activer les clés étrangères
       this.db.pragma('foreign_keys = ON');
@@ -36,15 +50,16 @@ class SQLiteService {
       // Créer les tables
       this.createTables();
       
+      this.isInitialized = true;
       console.log("✅ SQLite initialisé avec succès");
     } catch (error) {
       console.error("❌ Erreur lors de l'initialisation SQLite:", error);
-      throw error;
+      this.isInitialized = false;
     }
   }
 
   private createTables(): void {
-    if (!this.db) throw new Error("Base de données non initialisée");
+    if (!this.db || !isNodeEnvironment) return;
 
     // Table des appareils
     this.db.exec(`
@@ -117,16 +132,24 @@ class SQLiteService {
     console.log("📦 Tables SQLite créées");
   }
 
-  private ensureDB(): Database.Database {
-    if (!this.db) {
-      throw new Error("Base de données non initialisée");
+  private ensureDB(): any {
+    if (!isNodeEnvironment) {
+      throw new Error("SQLite non disponible dans l'environnement navigateur");
+    }
+    
+    if (!this.db || !this.isInitialized) {
+      throw new Error("Base de données SQLite non initialisée");
     }
     return this.db;
   }
 
-  // === MÉTHODES POUR LES APPAREILS ===
-
+  // Méthodes avec fallback pour l'environnement navigateur
   async saveAppliances(appliances: Appliance[]): Promise<void> {
+    if (!isNodeEnvironment) {
+      console.log("📱 Sauvegarde SQLite ignorée - environnement navigateur");
+      return;
+    }
+
     const db = this.ensureDB();
     
     const stmt = db.prepare(`
@@ -154,6 +177,11 @@ class SQLiteService {
   }
 
   async loadAppliances(): Promise<Appliance[]> {
+    if (!isNodeEnvironment) {
+      console.log("📱 Chargement SQLite ignoré - environnement navigateur");
+      return [];
+    }
+
     const db = this.ensureDB();
     
     const stmt = db.prepare('SELECT * FROM appliances ORDER BY dateAdded DESC');
@@ -174,24 +202,36 @@ class SQLiteService {
   }
 
   async deleteAppliance(id: string): Promise<void> {
+    if (!isNodeEnvironment) {
+      console.log("📱 Suppression SQLite ignorée - environnement navigateur");
+      return;
+    }
+
     const db = this.ensureDB();
-    
     const stmt = db.prepare('DELETE FROM appliances WHERE id = ?');
     stmt.run(id);
   }
 
   async clearAppliances(): Promise<void> {
+    if (!isNodeEnvironment) {
+      console.log("📱 Nettoyage SQLite ignoré - environnement navigateur");
+      return;
+    }
+
     const db = this.ensureDB();
-    
     const stmt = db.prepare('DELETE FROM appliances');
     stmt.run();
     
     console.log("🗑️ Tous les appareils supprimés de SQLite");
   }
 
-  // === MÉTHODES POUR LES ASSOCIATIONS ===
-
+  // Méthodes pour les associations - avec fallback
   async saveAssociations(associations: AppliancePartAssociation[]): Promise<void> {
+    if (!isNodeEnvironment) {
+      console.log("📱 Sauvegarde associations SQLite ignorée - environnement navigateur");
+      return;
+    }
+
     const db = this.ensureDB();
     
     const stmt = db.prepare(`
@@ -216,6 +256,11 @@ class SQLiteService {
   }
 
   async loadAssociations(): Promise<AppliancePartAssociation[]> {
+    if (!isNodeEnvironment) {
+      console.log("📱 Chargement associations SQLite ignoré - environnement navigateur");
+      return [];
+    }
+
     const db = this.ensureDB();
     
     const stmt = db.prepare('SELECT * FROM appliance_part_associations');
@@ -233,15 +278,24 @@ class SQLiteService {
   }
 
   async deleteAssociation(id: string): Promise<void> {
+    if (!isNodeEnvironment) {
+      console.log("📱 Suppression association SQLite ignorée - environnement navigateur");
+      return;
+    }
+
     const db = this.ensureDB();
     
     const stmt = db.prepare('DELETE FROM appliance_part_associations WHERE id = ?');
     stmt.run(id);
   }
 
-  // === MÉTHODES POUR LES RÉFÉRENCES DE PIÈCES ===
-
+  // Méthodes pour les références de pièces - avec fallback
   async savePartReferences(partReferences: string[]): Promise<void> {
+    if (!isNodeEnvironment) {
+      console.log("📱 Sauvegarde références SQLite ignorée - environnement navigateur");
+      return;
+    }
+
     const db = this.ensureDB();
     
     const stmt = db.prepare(`
@@ -260,6 +314,11 @@ class SQLiteService {
   }
 
   async loadPartReferences(): Promise<string[]> {
+    if (!isNodeEnvironment) {
+      console.log("📱 Chargement références SQLite ignoré - environnement navigateur");
+      return [];
+    }
+
     const db = this.ensureDB();
     
     const stmt = db.prepare('SELECT reference FROM part_references ORDER BY dateAdded DESC');
@@ -270,9 +329,13 @@ class SQLiteService {
     return references;
   }
 
-  // === MÉTHODES POUR LES SESSIONS D'IMPORT ===
-
+  // Méthodes pour les sessions d'import - avec fallback
   async saveImportSessions(sessions: Record<string, ImportSession>): Promise<void> {
+    if (!isNodeEnvironment) {
+      console.log("📱 Sauvegarde sessions SQLite ignorée - environnement navigateur");
+      return;
+    }
+
     const db = this.ensureDB();
     
     const stmt = db.prepare(`
@@ -301,6 +364,11 @@ class SQLiteService {
   }
 
   async loadImportSessions(): Promise<Record<string, ImportSession>> {
+    if (!isNodeEnvironment) {
+      console.log("📱 Chargement sessions SQLite ignoré - environnement navigateur");
+      return {};
+    }
+
     const db = this.ensureDB();
     
     const stmt = db.prepare('SELECT * FROM import_sessions ORDER BY createdAt DESC');
@@ -323,9 +391,13 @@ class SQLiteService {
     return sessions;
   }
 
-  // === MÉTHODES POUR LES MÉTADONNÉES ===
-
+  // Méthodes pour les métadonnées - avec fallback
   async saveMetadata(key: string, value: any): Promise<void> {
+    if (!isNodeEnvironment) {
+      console.log("📱 Sauvegarde métadonnées SQLite ignorée - environnement navigateur");
+      return;
+    }
+
     const db = this.ensureDB();
     
     const stmt = db.prepare(`
@@ -337,6 +409,11 @@ class SQLiteService {
   }
 
   async loadMetadata(key: string): Promise<any> {
+    if (!isNodeEnvironment) {
+      console.log("📱 Chargement métadonnées SQLite ignoré - environnement navigateur");
+      return null;
+    }
+
     const db = this.ensureDB();
     
     const stmt = db.prepare('SELECT value FROM metadata WHERE key = ?');
@@ -352,9 +429,13 @@ class SQLiteService {
     return null;
   }
 
-  // === MÉTHODES UTILITAIRES ===
-
+  // Méthodes utilitaires - avec fallback
   async clearAllData(): Promise<void> {
+    if (!isNodeEnvironment) {
+      console.log("📱 Nettoyage SQLite ignoré - environnement navigateur");
+      return;
+    }
+
     const db = this.ensureDB();
     
     const transaction = db.transaction(() => {
@@ -375,6 +456,16 @@ class SQLiteService {
     sessions: number;
     partReferences: number;
   }> {
+    if (!isNodeEnvironment) {
+      console.log("📱 Info stockage SQLite ignorée - environnement navigateur");
+      return {
+        appliances: 0,
+        associations: 0,
+        sessions: 0,
+        partReferences: 0
+      };
+    }
+
     const db = this.ensureDB();
 
     const applianceCount = db.prepare('SELECT COUNT(*) as count FROM appliances').get() as { count: number };
@@ -390,9 +481,14 @@ class SQLiteService {
     };
   }
 
+  // Méthode pour vérifier si SQLite est disponible
+  isAvailable(): boolean {
+    return isNodeEnvironment && this.isInitialized;
+  }
+
   // Fermer la base de données
   close(): void {
-    if (this.db) {
+    if (this.db && isNodeEnvironment) {
       this.db.close();
       this.db = null;
     }
