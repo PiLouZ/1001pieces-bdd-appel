@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Navigation from "@/components/Navigation";
@@ -172,7 +171,7 @@ const Appliances: React.FC = () => {
               ) : (
                 <ApplianceList 
                   appliances={enhancedSearch} 
-                  onUpdate={updateAppliance}
+                  onEdit={updateAppliance}
                   onDelete={deleteAppliance}
                 />
               )}
