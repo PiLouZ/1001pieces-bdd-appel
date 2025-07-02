@@ -10,21 +10,27 @@ export function exportAppliances(appliances: Appliance[], options: ExportOptions
   const { format, includeHeader = true, partReference } = options;
   
   if (format === "csv") {
-    // Headers for the CSV - only include part reference if one is specified
-    const headers = (partReference && partReference !== "ALL_PARTS") ? [
-      "Référence de la pièce",
-      "Type de l'appareil",
-      "Marque de l'appareil",
-      "Modèle de l'appareil",
-      "Référence technique de l'appareil",
-      "Référence commerciale de l'appareil"
-    ] : [
-      "Type de l'appareil",
-      "Marque de l'appareil",
-      "Modèle de l'appareil",
-      "Référence technique de l'appareil",
-      "Référence commerciale de l'appareil"
-    ];
+    // Headers for the CSV - avec référence de pièce en premier si spécifiée
+    let headers: string[] = [];
+    
+    if (partReference && partReference !== "ALL_PARTS") {
+      headers = [
+        "Référence de la pièce",
+        "Type de l'appareil",
+        "Marque de l'appareil",
+        "Modèle de l'appareil", 
+        "Référence technique de l'appareil",
+        "Référence commerciale de l'appareil"
+      ];
+    } else {
+      headers = [
+        "Type de l'appareil",
+        "Marque de l'appareil",
+        "Modèle de l'appareil",
+        "Référence technique de l'appareil", 
+        "Référence commerciale de l'appareil"
+      ];
+    }
     
     // Start with headers if includeHeader is true
     let csv = includeHeader ? headers.join(";") + "\n" : "";
@@ -42,20 +48,26 @@ export function exportAppliances(appliances: Appliance[], options: ExportOptions
       // Create the model field by concatenating reference and commercialRef
       const model = `${reference}${commercialRef ? " - " + commercialRef : ""}`;
       
-      const row = (partReference && partReference !== "ALL_PARTS") ? [
-        partReference,
-        type,
-        brand,
-        model,
-        reference,
-        commercialRef
-      ] : [
-        type,
-        brand,
-        model,
-        reference,
-        commercialRef
-      ];
+      let row: string[] = [];
+      
+      if (partReference && partReference !== "ALL_PARTS") {
+        row = [
+          partReference,
+          type,
+          brand,
+          model,
+          reference,
+          commercialRef
+        ];
+      } else {
+        row = [
+          type,
+          brand,
+          model,
+          reference,
+          commercialRef
+        ];
+      }
       
       csv += row.join(";") + "\n";
     });

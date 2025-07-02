@@ -216,8 +216,8 @@ export const useAppliances = () => {
   };
 
   // Importer plusieurs appareils avec une approche simplifiée
-  const importAppliances = useCallback((newAppliances: Appliance[]) => {
-    console.log("=== DÉBUT IMPORT APPAREILS SIMPLIFIÉ ===");
+  const importAppliances = useCallback((newAppliances: Appliance[], callback?: (importedAppliances: Appliance[]) => void) => {
+    console.log("=== DÉBUT IMPORT APPAREILS CORRIGÉ ===");
     console.log("Appareils à importer:", newAppliances.length);
     
     if (newAppliances.length === 0) {
@@ -244,10 +244,16 @@ export const useAppliances = () => {
       setAppliances(prev => {
         const updated = [...prev, ...appliancesToAdd];
         console.log("État de la base après import:", updated.length, "appareils");
+        
+        // Appeler le callback avec les appareils ajoutés
+        if (callback) {
+          callback(appliancesToAdd);
+        }
+        
         return updated;
       });
       
-      console.log("=== FIN IMPORT APPAREILS SIMPLIFIÉ ===");
+      console.log("=== FIN IMPORT APPAREILS CORRIGÉ ===");
       return uniqueNewAppliances.length;
     }
     
