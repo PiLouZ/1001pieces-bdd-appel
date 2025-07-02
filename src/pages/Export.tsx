@@ -22,7 +22,7 @@ const Export: React.FC = () => {
     isLoading 
   } = useAppliances();
   
-  const [selectedPartReference, setSelectedPartReference] = useState("");
+  const [selectedPartReference, setSelectedPartReference] = useState("ALL_PARTS");
   const [includeHeaders, setIncludeHeaders] = useState(true);
   const [customFileName, setCustomFileName] = useState("");
   const [selectedColumns, setSelectedColumns] = useState({
@@ -35,7 +35,7 @@ const Export: React.FC = () => {
 
   // Appareils filtrés par référence de pièce
   const filteredAppliances = useMemo(() => {
-    if (!selectedPartReference) return allAppliances;
+    if (selectedPartReference === "ALL_PARTS") return allAppliances;
     return getAppliancesByPartReference(selectedPartReference);
   }, [selectedPartReference, allAppliances, getAppliancesByPartReference]);
 
@@ -58,11 +58,11 @@ const Export: React.FC = () => {
     const csvContent = exportAppliances(filteredData, {
       format: "csv",
       includeHeader: includeHeaders,
-      partReference: selectedPartReference
+      partReference: selectedPartReference === "ALL_PARTS" ? undefined : selectedPartReference
     });
 
     const fileName = customFileName || 
-      `export-appareils${selectedPartReference ? `-compatibles-${selectedPartReference}` : ''}-${new Date().toISOString().split('T')[0]}`;
+      `export-appareils${selectedPartReference !== "ALL_PARTS" ? `-compatibles-${selectedPartReference}` : ''}-${new Date().toISOString().split('T')[0]}`;
     
     const csvData = generateCSVFile(csvContent, fileName);
     
@@ -153,14 +153,14 @@ const Export: React.FC = () => {
                     <SelectValue placeholder="Toutes les pièces" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Toutes les pièces</SelectItem>
+                    <SelectItem value="ALL_PARTS">Toutes les pièces</SelectItem>
                     {knownPartReferences.map(ref => (
                       <SelectItem key={ref} value={ref}>{ref}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-gray-500 mt-1">
-                  {selectedPartReference ? 
+                  {selectedPartReference !== "ALL_PARTS" ? 
                     `${filteredAppliances.length} appareils compatibles` : 
                     `${allAppliances.length} appareils au total`
                   }
@@ -273,7 +273,7 @@ const Export: React.FC = () => {
         </div>
 
         {/* Zones HTML */}
-        {selectedPartReference && filteredAppliances.length > 0 && (
+        {selectedPartReference !== "ALL_PARTS" && filteredAppliances.length > 0 && (
           <div className="mt-6">
             <Card>
               <CardHeader>

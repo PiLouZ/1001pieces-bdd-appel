@@ -10,8 +10,8 @@ export function exportAppliances(appliances: Appliance[], options: ExportOptions
   const { format, includeHeader = true, partReference } = options;
   
   if (format === "csv") {
-    // Headers for the CSV - removed "Référence de la pièce" for all appliances and by brand/type exports
-    const headers = partReference ? [
+    // Headers for the CSV - only include part reference if one is specified
+    const headers = (partReference && partReference !== "ALL_PARTS") ? [
       "Référence de la pièce",
       "Type de l'appareil",
       "Marque de l'appareil",
@@ -42,7 +42,7 @@ export function exportAppliances(appliances: Appliance[], options: ExportOptions
       // Create the model field by concatenating reference and commercialRef
       const model = `${reference}${commercialRef ? " - " + commercialRef : ""}`;
       
-      const row = partReference ? [
+      const row = (partReference && partReference !== "ALL_PARTS") ? [
         partReference,
         type,
         brand,
@@ -68,7 +68,7 @@ export function exportAppliances(appliances: Appliance[], options: ExportOptions
     // Add header row if includeHeader is true
     if (includeHeader) {
       html += '<thead><tr>';
-      if (partReference) {
+      if (partReference && partReference !== "ALL_PARTS") {
         html += '<th>Référence de la pièce</th>';
       }
       html += '<th>Type de l\'appareil</th>';
@@ -93,7 +93,7 @@ export function exportAppliances(appliances: Appliance[], options: ExportOptions
       const model = `${reference}${commercialRef ? " - " + commercialRef : ""}`;
       
       html += '<tr>';
-      if (partReference) {
+      if (partReference && partReference !== "ALL_PARTS") {
         html += `<td>${partReference}</td>`;
       }
       html += `<td>${type}</td>`;
