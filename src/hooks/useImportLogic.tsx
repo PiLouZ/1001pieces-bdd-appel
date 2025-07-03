@@ -80,7 +80,7 @@ export const useImportLogic = ({
       
       setIsProcessing(false);
       console.log("=== FIN IMPORT CORRIGÉ ===");
-      return safeAppliancesToImport;
+      return importedAppliancesWithIds;
       
     } catch (error) {
       console.error("💥 ERREUR lors de l'import:", error);

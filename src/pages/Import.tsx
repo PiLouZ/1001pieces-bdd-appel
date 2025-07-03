@@ -68,7 +68,7 @@ const Import: React.FC = () => {
             getApplianceByCommercialRef={getApplianceByCommercialRef}
             suggestBrand={safeSuggestBrand}
             suggestType={safeSuggestType}
-            associateAppliancesToPartReference={safeAssociateAppliancesToPartReference}
+            associateAppliancesToPartReference={associateApplicancesToPartReference}
             isLoading={isLoading}
           />
         </div>
