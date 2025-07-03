@@ -27,9 +27,10 @@ export const useImportLogic = ({
     try {
       const safeAppliancesToImport = Array.isArray(appliancesToImport) ? appliancesToImport : [];
       
-      console.log("=== DÉBUT IMPORT CORRIGÉ ===");
+      console.log("=== DÉBUT IMPORT AVEC INDEXEDDB ===");
       console.log("📋 Appareils à importer:", safeAppliancesToImport.length);
       console.log("📋 Référence de pièce:", partReference);
+      console.log("📋 Détails des appareils:", safeAppliancesToImport.map(a => ({ref: a.reference, brand: a.brand, type: a.type})));
       
       if (safeAppliancesToImport.length === 0) {
         console.log("Aucun appareil à importer");
@@ -79,7 +80,7 @@ export const useImportLogic = ({
       }
       
       setIsProcessing(false);
-      console.log("=== FIN IMPORT CORRIGÉ ===");
+      console.log("=== FIN IMPORT AVEC INDEXEDDB ===");
       return importedAppliancesWithIds;
       
     } catch (error) {

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Appliance, ImportSession, AppliancePartAssociation } from "../types/appliance";
 import { defaultAppliances } from "../data/defaultAppliances";
-import { sqliteService } from "@/services/sqliteService";
+import { indexedDBService } from "@/services/indexedDBService";
 import { useMigration } from "./useMigration";
 import { toast } from "sonner";
 
@@ -39,17 +39,17 @@ export const useAppliances = () => {
         loadedPartRefs,
         loadedSessions
       ] = await Promise.all([
-        sqliteService.loadAppliances(),
-        sqliteService.loadAssociations(),
-        sqliteService.loadPartReferences(),
-        sqliteService.loadImportSessions()
+        indexedDBService.loadAppliances(),
+        indexedDBService.loadAssociations(),
+        indexedDBService.loadPartReferences(),
+        indexedDBService.loadImportSessions()
       ]);
 
       // Si aucun appareil n'est trouvé, utiliser les données par défaut
       if (loadedAppliances.length === 0) {
         console.log("📦 Aucun appareil trouvé, utilisation des données par défaut");
         setAppliances(defaultAppliances);
-        await sqliteService.saveAppliances(defaultAppliances);
+        await indexedDBService.saveAppliances(defaultAppliances);
       } else {
         setAppliances(loadedAppliances);
       }
@@ -75,7 +75,7 @@ export const useAppliances = () => {
     if (!migrationReady || appliancesToSave.length === 0) return;
 
     try {
-      await sqliteService.saveAppliances(appliancesToSave);
+      await indexedDBService.saveAppliances(appliancesToSave);
     } catch (error) {
       console.error("❌ Erreur sauvegarde appareils:", error);
       toast.error("Erreur lors de la sauvegarde des appareils");
@@ -87,7 +87,7 @@ export const useAppliances = () => {
     if (!migrationReady || associationsToSave.length === 0) return;
 
     try {
-      await sqliteService.saveAssociations(associationsToSave);
+      await indexedDBService.saveAssociations(associationsToSave);
     } catch (error) {
       console.error("❌ Erreur sauvegarde associations:", error);
       toast.error("Erreur lors de la sauvegarde des associations");
@@ -99,7 +99,7 @@ export const useAppliances = () => {
     if (!migrationReady || Object.keys(sessionsToSave).length === 0) return;
 
     try {
-      await sqliteService.saveImportSessions(sessionsToSave);
+      await indexedDBService.saveImportSessions(sessionsToSave);
     } catch (error) {
       console.error("❌ Erreur sauvegarde sessions:", error);
       toast.error("Erreur lors de la sauvegarde des sessions");
@@ -111,7 +111,7 @@ export const useAppliances = () => {
     if (!migrationReady || partRefsToSave.length === 0) return;
 
     try {
-      await sqliteService.savePartReferences(partRefsToSave);
+      await indexedDBService.savePartReferences(partRefsToSave);
     } catch (error) {
       console.error("❌ Erreur sauvegarde références:", error);
       toast.error("Erreur lors de la sauvegarde des références");
@@ -273,7 +273,7 @@ export const useAppliances = () => {
 
       // Supprimer de IndexedDB
       if (migrationReady) {
-        await sqliteService.deleteAppliance(id);
+        await indexedDBService.deleteAppliance(id);
       }
     } catch (error) {
       console.error("❌ Erreur lors de la suppression:", error);
@@ -290,10 +290,10 @@ export const useAppliances = () => {
       setKnownPartReferences([]);
 
       if (migrationReady) {
-        await sqliteService.clearAllData();
+        await indexedDBService.clearAllData();
       }
       
-      console.log("=== BASE DE DONNÉES NETTOYÉE (SQLITE) ===");
+      console.log("=== BASE DE DONNÉES NETTOYÉE (INDEXEDDB) ===");
       toast.success("Base de données vidée avec succès");
     } catch (error) {
       console.error("❌ Erreur lors du nettoyage:", error);
