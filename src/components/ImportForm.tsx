@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Download, FileDown } from "lucide-react";
+import ImportExportDialog from "./ImportExportDialog";
 
 interface ImportFormProps {
   onImport: (appliances: Appliance[], partReference?: string) => Appliance[];
@@ -25,8 +26,8 @@ interface ImportFormProps {
 
 const ImportForm: React.FC<ImportFormProps> = (props) => {
   const [appliancesWithMissingInfo, setAppliancesWithMissingInfo] = useState<Appliance[]>([]);
-  const [showExportDialog, setShowExportDialog] = useState(false);
-  const [csvExportData, setCsvExportData] = useState<{url: string, fileName: string} | null>(null);
+  const [showImportExportDialog, setShowImportExportDialog] = useState(false);
+  const [lastImportData, setLastImportData] = useState<{appliances: Appliance[], partReference?: string} | null>(null);
 
   const handleImportWithValidation = (appliances: Appliance[], partReference?: string) => {
     // Vérifier si des informations sont manquantes
@@ -39,27 +40,26 @@ const ImportForm: React.FC<ImportFormProps> = (props) => {
     } else {
       const imported = props.onImport(appliances, partReference);
       
-      // Préparer l'export CSV si référence de pièce fournie
-      if (partReference && imported.length > 0) {
-        const csvContent = exportAppliances(imported, {
-          format: "csv",
-          includeHeader: true,
-          partReference: partReference
-        });
-        
-        const fileName = `export-appareils-compatibles-${partReference}-${new Date().toISOString().split('T')[0]}`;
-        const csvData = generateCSVFile(csvContent, fileName);
-        setCsvExportData(csvData);
-        setShowExportDialog(true);
+      // Afficher le dialog d'export si on a des appareils importés
+      if (imported.length > 0) {
+        setLastImportData({ appliances: imported, partReference });
+        setShowImportExportDialog(true);
       }
       
       return imported;
     }
   };
 
-  const handleCompleteMissingInfo = (completedAppliances: Appliance[]) => {
-    const imported = props.onImport(completedAppliances);
+  const handleCompleteMissingInfo = (completedAppliances: Appliance[], partReference?: string) => {
+    const imported = props.onImport(completedAppliances, partReference);
     setAppliancesWithMissingInfo([]);
+    
+    // Afficher le dialog d'export après complétion
+    if (imported.length > 0) {
+      setLastImportData({ appliances: imported, partReference });
+      setShowImportExportDialog(true);
+    }
+    
     return imported;
   };
 
@@ -67,30 +67,6 @@ const ImportForm: React.FC<ImportFormProps> = (props) => {
     setAppliancesWithMissingInfo([]);
   };
 
-  const handleDownloadCsv = () => {
-    if (csvExportData) {
-      const link = document.createElement("a");
-      link.setAttribute("href", csvExportData.url);
-      link.setAttribute("download", csvExportData.fileName);
-      link.style.visibility = "hidden";
-      
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(csvExportData.url);
-      
-      setShowExportDialog(false);
-      setCsvExportData(null);
-    }
-  };
-
-  const handleCloseExportDialog = () => {
-    if (csvExportData && csvExportData.url) {
-      URL.revokeObjectURL(csvExportData.url);
-    }
-    setShowExportDialog(false);
-    setCsvExportData(null);
-  };
 
   // Si on a des appareils avec des infos manquantes, afficher le formulaire de complétion
   if (appliancesWithMissingInfo.length > 0) {
@@ -100,6 +76,7 @@ const ImportForm: React.FC<ImportFormProps> = (props) => {
         onUpdateAppliances={handleCompleteMissingInfo}
         knownBrands={props.knownBrands || []}
         knownTypes={props.knownTypes || []}
+        partReference={lastImportData?.partReference}
       />
     );
   }
@@ -111,37 +88,15 @@ const ImportForm: React.FC<ImportFormProps> = (props) => {
         onImport={handleImportWithValidation}
       />
       
-      {/* Dialog pour proposer l'export CSV */}
-      <Dialog open={showExportDialog} onOpenChange={handleCloseExportDialog}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Télécharger les résultats</DialogTitle>
-            <DialogDescription>
-              L'importation a été effectuée avec succès. Souhaitez-vous télécharger le fichier CSV de compatibilité?
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="flex justify-center p-4">
-            <FileDown className="h-16 w-16 text-blue-500" />
-          </div>
-          
-          {csvExportData && (
-            <p className="text-center text-sm text-gray-500">
-              {csvExportData.fileName}
-            </p>
-          )}
-          
-          <DialogFooter className="sm:justify-center gap-2 mt-4">
-            <Button variant="outline" onClick={handleCloseExportDialog}>
-              Plus tard
-            </Button>
-            <Button onClick={handleDownloadCsv} disabled={!csvExportData}>
-              <Download className="mr-2 h-4 w-4" />
-              Télécharger maintenant
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Dialog d'import/export */}
+      {lastImportData && (
+        <ImportExportDialog
+          open={showImportExportDialog}
+          onOpenChange={setShowImportExportDialog}
+          appliances={lastImportData.appliances}
+          partReference={lastImportData.partReference}
+        />
+      )}
     </>
   );
 };

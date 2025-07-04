@@ -11,9 +11,10 @@ import QuickEditTable from "./forms/QuickEditTable";
 
 interface QuickEditFormProps {
   appliances: Appliance[];
-  onUpdateAppliances: (updatedAppliances: Appliance[]) => void;
+  onUpdateAppliances: (updatedAppliances: Appliance[], partReference?: string) => void;
   knownBrands: string[];
   knownTypes: string[];
+  partReference?: string;
 }
 
 const QuickEditForm: React.FC<QuickEditFormProps> = ({
@@ -21,6 +22,7 @@ const QuickEditForm: React.FC<QuickEditFormProps> = ({
   onUpdateAppliances,
   knownBrands,
   knownTypes,
+  partReference,
 }) => {
   const [editedAppliances, setEditedAppliances] = useState<Appliance[]>(appliances);
   const [availableBrands, setAvailableBrands] = useState<string[]>(knownBrands);
@@ -99,7 +101,7 @@ const QuickEditForm: React.FC<QuickEditFormProps> = ({
       return;
     }
 
-    onUpdateAppliances(editedAppliances);
+    onUpdateAppliances(editedAppliances, partReference);
     toast.success(`${editedAppliances.length} appareils complétés avec succès`);
   };
 

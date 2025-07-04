@@ -10,6 +10,9 @@ import { useAppliances } from "@/hooks/useAppliances";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import ImportSessionFilter from "@/components/ImportSessionFilter";
+import DuplicateDetection from "@/components/DuplicateDetection";
+import MassEditForm from "@/components/MassEditForm";
+import ColumnFilters from "@/components/ColumnFilters";
 import { Appliance } from "@/types/appliance";
 
 const Appliances: React.FC = () => {
@@ -30,13 +33,21 @@ const Appliances: React.FC = () => {
     recentAppliances,
     getPartReferencesForAppliance,
     associateApplicancesToPartReference,
-    removeAppliancePartAssociation
+    removeAppliancePartAssociation,
+    updateMultipleAppliances
   } = useAppliances();
 
   const [selectedSession, setSelectedSession] = useState<string | null>(null);
   const [showLastSessionOnly, setShowLastSessionOnly] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingAppliance, setEditingAppliance] = useState<Appliance | null>(null);
+  const [showMassEdit, setShowMassEdit] = useState(false);
+  const [columnFilters, setColumnFilters] = useState({
+    brand: "",
+    type: "",
+    reference: "",
+    commercialRef: ""
+  });
 
   // Simuler des sessions d'import pour la démonstration
   const importSessions = useMemo(() => {
@@ -75,26 +86,42 @@ const Appliances: React.FC = () => {
     return appliances;
   }, [appliances, allAppliances, selectedSession, showLastSessionOnly, importSessions]);
 
-  // Améliorer la recherche pour inclure les pièces détachées
+  // Améliorer la recherche pour inclure les pièces détachées et les filtres de colonnes
   const enhancedSearch = useMemo(() => {
-    if (!searchQuery) return filteredBySession;
+    let results = filteredBySession;
     
-    // Vérifier si la recherche correspond à une référence de pièce
-    if (knownPartReferences.includes(searchQuery)) {
-      const appliancesForPart = getAppliancesByPartReference(searchQuery);
-      return appliancesForPart.filter(app => 
-        filteredBySession.some(filteredApp => filteredApp.id === app.id)
-      );
+    // Appliquer les filtres de colonnes
+    if (columnFilters.brand || columnFilters.type || columnFilters.reference || columnFilters.commercialRef) {
+      results = results.filter(appliance => {
+        if (columnFilters.brand && !appliance.brand.toLowerCase().includes(columnFilters.brand.toLowerCase())) return false;
+        if (columnFilters.type && !appliance.type.toLowerCase().includes(columnFilters.type.toLowerCase())) return false;
+        if (columnFilters.reference && !appliance.reference.toLowerCase().includes(columnFilters.reference.toLowerCase())) return false;
+        if (columnFilters.commercialRef && !appliance.commercialRef?.toLowerCase().includes(columnFilters.commercialRef.toLowerCase())) return false;
+        return true;
+      });
     }
     
-    // Recherche standard
-    return filteredBySession.filter(appliance =>
-      appliance.reference.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (appliance.commercialRef && appliance.commercialRef.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      appliance.brand.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      appliance.type.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  }, [searchQuery, filteredBySession, knownPartReferences, getAppliancesByPartReference]);
+    // Appliquer la recherche textuelle
+    if (searchQuery) {
+      // Vérifier si la recherche correspond à une référence de pièce
+      if (knownPartReferences.includes(searchQuery)) {
+        const appliancesForPart = getAppliancesByPartReference(searchQuery);
+        results = appliancesForPart.filter(app => 
+          results.some(filteredApp => filteredApp.id === app.id)
+        );
+      } else {
+        // Recherche standard
+        results = results.filter(appliance =>
+          appliance.reference.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          (appliance.commercialRef && appliance.commercialRef.toLowerCase().includes(searchQuery.toLowerCase())) ||
+          appliance.brand.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          appliance.type.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+      }
+    }
+    
+    return results;
+  }, [searchQuery, filteredBySession, knownPartReferences, getAppliancesByPartReference, columnFilters]);
 
   const handleEditAppliance = (appliance: Appliance) => {
     setEditingAppliance(appliance);
@@ -105,6 +132,27 @@ const Appliances: React.FC = () => {
     updateAppliance(updatedAppliance);
     setEditDialogOpen(false);
     setEditingAppliance(null);
+  };
+
+  const handleMassEdit = (updates: { ids: string[]; brand?: string; type?: string }) => {
+    if (updates.brand || updates.type) {
+      const updateData: Partial<Appliance> = {};
+      if (updates.brand) updateData.brand = updates.brand;
+      if (updates.type) updateData.type = updates.type;
+      
+      updateMultipleAppliances(updates.ids, updateData);
+    }
+  };
+
+  const handleMergeDuplicates = (keepId: string, mergeIds: string[], mergedData: Partial<Appliance>) => {
+    // Mettre à jour l'appareil conservé avec les nouvelles données
+    const keepAppliance = allAppliances.find(a => a.id === keepId);
+    if (keepAppliance) {
+      updateAppliance({ ...keepAppliance, ...mergedData });
+    }
+    
+    // Supprimer les appareils en doublon
+    mergeIds.forEach(id => deleteAppliance(id));
   };
 
   if (!migrationReady) {
@@ -136,6 +184,12 @@ const Appliances: React.FC = () => {
           </h1>
           
           <div className="flex items-center space-x-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowMassEdit(!showMassEdit)}
+            >
+              Édition en masse
+            </Button>
             <Badge variant="outline">
               {enhancedSearch.length} appareils
             </Badge>
@@ -153,12 +207,22 @@ const Appliances: React.FC = () => {
               <CardTitle>Recherche et filtres</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <SearchBar 
-                value={searchQuery} 
-                onChange={setSearchQuery}
-                placeholder="Rechercher par référence, marque, type ou référence de pièce..."
-                knownPartReferences={knownPartReferences}
-              />
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <SearchBar 
+                    value={searchQuery} 
+                    onChange={setSearchQuery}
+                    placeholder="Rechercher par référence, marque, type ou référence de pièce..."
+                    knownPartReferences={knownPartReferences}
+                  />
+                </div>
+                <ColumnFilters
+                  filters={columnFilters}
+                  onFiltersChange={setColumnFilters}
+                  knownBrands={knownBrands}
+                  knownTypes={knownTypes}
+                />
+              </div>
               
               {importSessions.length > 0 && (
                 <ImportSessionFilter
@@ -171,6 +235,23 @@ const Appliances: React.FC = () => {
               )}
             </CardContent>
           </Card>
+
+          {/* Détection de doublons */}
+          <DuplicateDetection 
+            appliances={enhancedSearch} 
+            onMergeDuplicates={handleMergeDuplicates}
+            onUpdateAppliance={updateAppliance}
+          />
+
+          {/* Édition en masse */}
+          {showMassEdit && (
+            <MassEditForm
+              appliances={enhancedSearch}
+              onUpdateAppliances={handleMassEdit}
+              knownBrands={knownBrands}
+              knownTypes={knownTypes}
+            />
+          )}
 
           <Card>
             <CardHeader>

@@ -40,14 +40,17 @@ export const useImportLogic = ({
 
       // Étape 1: Importer tous les appareils avec callback pour récupérer les IDs
       console.log("📥 Import des appareils...");
-      let importedAppliancesWithIds: any[] = [];
+      let importedAppliancesWithIds: Appliance[] = [];
       
       const importedCount = importAppliances(safeAppliancesToImport, (importedAppliances) => {
         importedAppliancesWithIds = importedAppliances;
-        console.log("📋 Callback: appareils reçus avec IDs:", importedAppliances.map(a => a.id));
+        console.log("📋 Callback: appareils reçus avec IDs:", importedAppliances.map(a => `${a.id} (${a.reference})`));
       });
       
       console.log("✅ Appareils importés:", importedCount);
+      
+      // Attendre que le callback soit traité (synchrone dans React)
+      console.log("🔍 Vérification des IDs après callback:", importedAppliancesWithIds.length);
 
       // Étape 2: Association directe à la référence de pièce si fournie
       if (partReference && partReference.trim() && importedCount > 0 && importedAppliancesWithIds.length > 0) {

@@ -60,6 +60,9 @@ export const parseClipboardData = (
     if (columns === 2) {
       // Format à 2 colonnes : Référence technique, Référence commerciale
       return parseTwoColumnFormat(lines, getApplianceByReference, getApplianceByCommercialRef, suggestBrand, suggestType);
+    } else if (columns === 3) {
+      // Format à 3 colonnes : Référence technique, Marque, Type
+      return parseThreeColumnFormat(lines);
     } else if (columns >= 4) {
       // Format à 4 colonnes : Type, Marque, Référence technique, Référence commerciale
       return parseFourColumnFormat(lines);
@@ -67,7 +70,7 @@ export const parseClipboardData = (
       return { 
         success: false, 
         appliances: [], 
-        errors: [`Format non reconnu. ${columns} colonnes détectées. Formats acceptés : 2 ou 4 colonnes.`] 
+        errors: [`Format non reconnu. ${columns} colonnes détectées. Formats acceptés : 2, 3 ou 4 colonnes.`] 
       };
     }
   } catch (error) {
@@ -185,6 +188,41 @@ const parseTwoColumnFormat = (
     success: true,
     appliances,
     twoColumnsFormat: true,
+    errors: errors.length > 0 ? errors : undefined
+  };
+};
+
+const parseThreeColumnFormat = (lines: string[]) => {
+  const appliances: Appliance[] = [];
+  const errors: string[] = [];
+  
+  lines.forEach((line, index) => {
+    const parts = detectAndParseLine(line);
+    
+    if (parts.length >= 3) {
+      const reference = parts[0];
+      const brand = parts[1];
+      const type = parts[2];
+      
+      const appliance: Appliance = {
+        id: `${Date.now()}-${index}`,
+        type,
+        brand,
+        reference,
+        commercialRef: "", // Pas de référence commerciale dans ce format
+        dateAdded: new Date().toISOString().split('T')[0],
+        source: "clipboard",
+        lastUpdated: new Date().toISOString()
+      };
+      appliances.push(appliance);
+    } else {
+      errors.push(`Ligne ${index + 1}: Format incorrect (${parts.length} colonnes au lieu de 3)`);
+    }
+  });
+  
+  return {
+    success: true,
+    appliances,
     errors: errors.length > 0 ? errors : undefined
   };
 };
